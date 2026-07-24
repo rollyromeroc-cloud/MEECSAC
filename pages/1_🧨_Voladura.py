@@ -1,8 +1,12 @@
+from pathlib import Path
+
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
 from auth import require_login
+
+LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_meecsac.jpg"
 from core.constants import (
     DESTINOS_MATERIAL,
     EQUIPOS_PERFORACION,
@@ -17,8 +21,9 @@ from core.voladura import calcular_programa
 from reports.docx_builder import build_voladura_report
 from viz.tunnel_plot import build_tunnel_figure, build_tunnel_figure_solido
 
-st.set_page_config(page_title="Voladura", page_icon="🧨", layout="wide")
+st.set_page_config(page_title="Voladura", page_icon=str(LOGO_PATH), layout="wide")
 require_login()
+st.logo(str(LOGO_PATH), size="large")
 st.session_state.setdefault("labores", [])
 
 # Paleta categórica fija (2 series: explosivo tipo 1 / tipo 2) — colorblind-safe
@@ -26,14 +31,14 @@ st.session_state.setdefault("labores", [])
 COLOR_TIPO1 = "#88CCEE"
 COLOR_TIPO2 = "#CC6677"
 
-st.title("🧨 Cálculo de perforación y voladura")
+st.title(":material/explosion: Cálculo de perforación y voladura")
 st.write(
     "Registra cada labor minera con su sección y malla de perforación. "
     "El cálculo de taladros, explosivos, accesorios, avance y tonelaje se "
     "actualiza automáticamente."
 )
 
-with st.expander("➕ Agregar labor minera", expanded=len(st.session_state["labores"]) == 0):
+with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=len(st.session_state["labores"]) == 0):
     with st.form("form_labor", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -84,7 +89,7 @@ with st.expander("➕ Agregar labor minera", expanded=len(st.session_state["labo
 
         observaciones = st.text_area("Observaciones", value="")
 
-        enviado = st.form_submit_button("Agregar labor")
+        enviado = st.form_submit_button("Agregar labor", icon=":material/add:", type="primary")
         if enviado:
             if not nombre:
                 st.error("Ingresa un nombre para la labor.")
@@ -129,7 +134,7 @@ if not labores:
 
 resultados = calcular_programa(labores)
 
-st.header("Resultados por labor")
+st.header(":material/table_view: Resultados por labor", divider="gray")
 
 tabla = pd.DataFrame(
     [
@@ -155,12 +160,12 @@ st.dataframe(tabla, use_container_width=True, hide_index=True)
 
 nombres = [labor.nombre for labor in labores]
 a_eliminar = st.selectbox("Eliminar labor", ["(ninguna)"] + nombres)
-if a_eliminar != "(ninguna)" and st.button("Eliminar seleccionada"):
+if a_eliminar != "(ninguna)" and st.button("Eliminar seleccionada", icon=":material/delete:"):
     idx = nombres.index(a_eliminar)
     st.session_state["labores"].pop(idx)
     st.rerun()
 
-st.header("Esquema de la labor")
+st.header(":material/view_in_ar: Esquema de la labor", divider="gray")
 c_lab, c_estilo = st.columns([2, 1])
 with c_lab:
     labor_a_graficar = st.selectbox("Labor a esquematizar", nombres, key="labor_esquema")
@@ -177,7 +182,7 @@ st.caption(
     "línea punteada = frente actual."
 )
 
-st.header("📐 Memoria de cálculo")
+st.header(":material/calculate: Memoria de cálculo", divider="gray")
 st.caption(
     "Desglose paso a paso (fórmula → sustitución → resultado) de cada cifra "
     "de la tabla de resultados — para auditar o sustentar el cálculo."
@@ -193,7 +198,7 @@ tabla_memoria = pd.DataFrame(
 )
 st.dataframe(tabla_memoria, use_container_width=True, hide_index=True)
 
-st.header("Gráficos")
+st.header(":material/bar_chart: Gráficos", divider="gray")
 
 col_a, col_b = st.columns(2)
 
@@ -239,10 +244,10 @@ fig_tonelaje = px.bar(
 fig_tonelaje.update_layout(yaxis_title="Tonelaje (TM)", xaxis_title=None)
 st.plotly_chart(fig_tonelaje, use_container_width=True)
 
-st.header("Reporte")
+st.header(":material/description: Reporte", divider="gray")
 titulo_proyecto = st.text_input("Título del proyecto para el reporte", value="Programa de perforación y voladura")
 
-with st.expander("Datos generales del informe (opcional)"):
+with st.expander("Datos generales del informe (opcional)", icon=":material/badge:"):
     st.caption(
         "Se usan para armar el encabezado y la introducción del reporte Word "
         "(estilo informe técnico). Deja en blanco lo que no aplique — nunca "
@@ -269,8 +274,10 @@ buffer = build_voladura_report(
     labores, resultados, titulo_proyecto, st.session_state["datos_generales"], estilo_reporte
 )
 st.download_button(
-    "⬇️ Descargar reporte Word",
+    "Descargar reporte Word",
     data=buffer,
     file_name="reporte_voladura.docx",
     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    icon=":material/download:",
+    type="primary",
 )

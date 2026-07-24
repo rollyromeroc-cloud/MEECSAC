@@ -1,5 +1,6 @@
 import dataclasses
 import json
+from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -9,13 +10,16 @@ from auth import require_login
 from core.models import LaborMinera, Polvorin, PuntoRiesgo
 from core.voladura import calcular_programa
 
-st.set_page_config(page_title="Programa General", page_icon="📊", layout="wide")
+LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_meecsac.jpg"
+
+st.set_page_config(page_title="Programa General", page_icon=str(LOGO_PATH), layout="wide")
 require_login()
+st.logo(str(LOGO_PATH), size="large")
 st.session_state.setdefault("labores", [])
 st.session_state.setdefault("polvorines", [])
 st.session_state.setdefault("puntos_riesgo", [])
 
-st.title("📊 Programa general")
+st.title(":material/dashboard: Programa general")
 st.write(
     "Vista consolidada de todas las labores del programa, y exportar/importar "
     "el proyecto completo (labores + polvorines + puntos de riesgo) como JSON "
@@ -33,10 +37,10 @@ if labores:
     total_tonelaje = sum(r.tonelaje_total_tm for r in resultados)
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Avance total programado", f"{total_avance:,.2f} m")
-    c2.metric("Disparos totales", f"{total_disparos:,}")
-    c3.metric("Explosivo total", f"{total_explosivo:,.2f} kg")
-    c4.metric("Tonelaje total", f"{total_tonelaje:,.2f} TM")
+    c1.metric(":material/straighten: Avance total programado", f"{total_avance:,.2f} m", border=True)
+    c2.metric(":material/bolt: Disparos totales", f"{total_disparos:,}", border=True)
+    c3.metric(":material/explosion: Explosivo total", f"{total_explosivo:,.2f} kg", border=True)
+    c4.metric(":material/scale: Tonelaje total", f"{total_tonelaje:,.2f} TM", border=True)
 
     df = pd.DataFrame(
         [
@@ -57,7 +61,7 @@ if labores:
     df["Avance acumulado (m)"] = df["Avance (m)"].cumsum()
     df["Tonelaje acumulado (TM)"] = df["Tonelaje (TM)"].cumsum()
 
-    st.subheader("Avance y tonelaje acumulado del programa")
+    st.subheader(":material/show_chart: Avance y tonelaje acumulado del programa")
     fig = px.line(
         df,
         x="Labor",
@@ -68,7 +72,7 @@ if labores:
     fig.update_layout(xaxis_title=None)
     st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Distribución de tonelaje por etapa")
+    st.subheader(":material/bar_chart: Distribución de tonelaje por etapa")
     fig2 = px.bar(
         df,
         x="Etapa",
@@ -80,7 +84,7 @@ if labores:
 else:
     st.info("Aún no hay labores registradas. Ve a la sección '🧨 Voladura' para agregar la primera.")
 
-st.header("Exportar / importar proyecto")
+st.header(":material/swap_horiz: Exportar / importar proyecto", divider="gray")
 
 st.write(
     "Exporta todo el proyecto (labores, polvorines, puntos de riesgo) a un "
@@ -100,20 +104,22 @@ def _proyecto_a_dict() -> dict:
 col_exp, col_imp = st.columns(2)
 
 with col_exp:
-    st.subheader("Exportar")
+    st.subheader(":material/upload_file: Exportar")
     json_bytes = json.dumps(_proyecto_a_dict(), indent=2, ensure_ascii=False).encode("utf-8")
     st.download_button(
-        "⬇️ Descargar proyecto (JSON)",
+        "Descargar proyecto (JSON)",
         data=json_bytes,
         file_name="proyecto_voladura_polvorin.json",
         mime="application/json",
+        icon=":material/download:",
+        type="primary",
     )
 
 with col_imp:
-    st.subheader("Importar")
+    st.subheader(":material/file_open: Importar")
     archivo = st.file_uploader("Cargar proyecto (JSON)", type="json")
     modo = st.radio("Al importar:", ["Reemplazar todo", "Agregar a lo existente"], horizontal=True)
-    if archivo is not None and st.button("Importar ahora"):
+    if archivo is not None and st.button("Importar ahora", icon=":material/publish:", type="primary"):
         try:
             datos = json.loads(archivo.read().decode("utf-8"))
             nuevas_labores = [LaborMinera(**d) for d in datos.get("labores", [])]

@@ -9,7 +9,11 @@ desarrollo.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import streamlit as st
+
+LOGO_PATH = Path(__file__).resolve().parent / "assets" / "logo_meecsac.jpg"
 
 
 def require_login() -> None:
@@ -28,10 +32,15 @@ def require_login() -> None:
     if st.session_state.get("autenticado"):
         return
 
-    st.title("🔒 Acceso privado")
-    st.write("Ingresa la contraseña del equipo para continuar.")
-    intento = st.text_input("Contraseña", type="password")
-    if st.button("Entrar"):
+    _, col_centro, _ = st.columns([1, 1, 1])
+    with col_centro:
+        if LOGO_PATH.exists():
+            st.image(str(LOGO_PATH), width="stretch")
+        st.title(":material/lock: Acceso privado")
+        st.write("Ingresa la contraseña del equipo para continuar.")
+        intento = st.text_input("Contraseña", type="password")
+        entrar = st.button("Entrar", icon=":material/login:", type="primary", width="stretch")
+    if entrar:
         if intento == password:
             st.session_state["autenticado"] = True
             st.rerun()

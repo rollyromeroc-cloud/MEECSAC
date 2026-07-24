@@ -1,14 +1,19 @@
+from pathlib import Path
+
 import streamlit as st
 
 from auth import require_login
 
+LOGO_PATH = Path(__file__).resolve().parent / "assets" / "logo_meecsac.jpg"
+
 st.set_page_config(
     page_title="Voladura & Polvorín",
-    page_icon="🧨",
+    page_icon=str(LOGO_PATH),
     layout="wide",
 )
 
 require_login()
+st.logo(str(LOGO_PATH), size="large")
 
 # Estado compartido entre páginas (dura mientras la pestaña del navegador
 # esté abierta; no se persiste entre sesiones — usar exportar/importar JSON
@@ -17,7 +22,8 @@ st.session_state.setdefault("labores", [])
 st.session_state.setdefault("polvorines", [])
 st.session_state.setdefault("puntos_riesgo", [])
 
-st.title("🧨 Voladura & Polvorín")
+st.title(":material/explosion: Voladura & Polvorín")
+st.caption("MEECSAC · Más que Explosivos")
 st.write(
     "Automatiza el cálculo de perforación y voladura por labor minera "
     "(explosivos, accesorios, avance, tonelaje) y la verificación de "
@@ -26,11 +32,11 @@ st.write(
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    st.metric("Labores cargadas", len(st.session_state["labores"]))
+    st.metric(":material/construction: Labores cargadas", len(st.session_state["labores"]), border=True)
 with col2:
-    st.metric("Polvorines cargados", len(st.session_state["polvorines"]))
+    st.metric(":material/warehouse: Polvorines cargados", len(st.session_state["polvorines"]), border=True)
 with col3:
-    st.metric("Puntos de riesgo cargados", len(st.session_state["puntos_riesgo"]))
+    st.metric(":material/warning: Puntos de riesgo cargados", len(st.session_state["puntos_riesgo"]), border=True)
 
 st.markdown(
     """

@@ -101,13 +101,48 @@ def _add_encabezado_informe(document: Document, datos: DatosGenerales, titulo_pr
     document.add_paragraph("")
 
 
+def _add_cartucho_plano(
+    document: Document, labor: LaborMinera, numero: int, datos: DatosGenerales
+) -> None:
+    """Cartucho/lámina tipo plano técnico (CAD), debajo del esquema: mismo
+    bloque de datos (proyecto, labor, escala, lámina, fecha) que un plano
+    real de AutoCAD/Civil3D lleva en su esquina inferior derecha."""
+    table = document.add_table(rows=3, cols=4)
+    table.style = "Table Grid"
+    celdas = table.rows
+
+    def _set(row, col, texto, negrita=False, tamano=8):
+        celda = celdas[row].cells[col]
+        celda.text = ""
+        p = celda.paragraphs[0]
+        run = p.add_run(texto)
+        run.bold = negrita
+        run.font.size = Pt(tamano)
+
+    _set(0, 0, "PROYECTO", negrita=True)
+    _set(0, 1, datos.nombre_concesion or "—")
+    _set(0, 2, "ESCALA", negrita=True)
+    _set(0, 3, "S/E (esquemático)")
+    _set(1, 0, "LABOR", negrita=True)
+    _set(1, 1, f"{labor.tipo}: {labor.nombre}")
+    _set(1, 2, "LÁMINA", negrita=True)
+    _set(1, 3, f"V-{numero:02d}")
+    _set(2, 0, "SECCIÓN", negrita=True)
+    _set(2, 1, f"{labor.ancho_m:.2f} × {labor.alto_m:.2f} m")
+    _set(2, 2, "FECHA", negrita=True)
+    _set(2, 3, _dt.date.today().isoformat())
+    document.add_paragraph("")
+
+
 def _add_labor_section(
     document: Document,
     numero: int,
     labor: LaborMinera,
     resultado: ResultadoVoladura,
     estilo_esquema: str = "wireframe",
+    datos: DatosGenerales | None = None,
 ) -> None:
+    datos = datos or DatosGenerales()
     document.add_heading(f"{numero}. {labor.tipo.upper()}: {labor.nombre}", level=1)
 
     descripcion = DESCRIPCION_TIPO_LABOR.get(labor.tipo)
@@ -129,6 +164,8 @@ def _add_labor_section(
         document.add_picture(BytesIO(png_bytes), width=Inches(6))
     except Exception:
         document.add_paragraph("(Esquema 3D no disponible en este entorno)")
+
+    _add_cartucho_plano(document, labor, numero, datos)
 
     document.add_heading(f"{numero}.1 Diseño del Trazo", level=2)
     document.add_paragraph(
@@ -418,7 +455,7 @@ def build_voladura_report(
 
     document.add_heading("Especificaciones Técnicas del Programa y Diseño de Voladura", level=1)
     for i, (labor, resultado) in enumerate(zip(labores, resultados), start=1):
-        _add_labor_section(document, i, labor, resultado, estilo_esquema)
+        _add_labor_section(document, i, labor, resultado, estilo_esquema, datos)
 
     _add_cuadros_consolidados(document, labores, resultados)
 
