@@ -12,10 +12,12 @@ from io import BytesIO
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.shared import Inches, Pt
 
+from core.memoria import memoria_calculo
 from core.models import LaborMinera, Polvorin, PuntoRiesgo, ResultadoDistancia, ResultadoVoladura
 from core.polvorin import area_shoelace, perimetro
+from viz.tunnel_plot import build_tunnel_figure
 
 
 def _fmt(value, decimals=2) -> str:
@@ -57,6 +59,14 @@ def _add_labor_section(
     document.add_paragraph(f"Etapa: {labor.etapa}")
     if labor.observaciones:
         document.add_paragraph(labor.observaciones)
+
+    try:
+        png_bytes = build_tunnel_figure(labor, resultado).to_image(
+            format="png", width=900, height=550, scale=2
+        )
+        document.add_picture(BytesIO(png_bytes), width=Inches(6))
+    except Exception:
+        document.add_paragraph("(Esquema 3D no disponible en este entorno)")
 
     document.add_heading("Diseño del trazo", level=2)
     _add_table(
@@ -140,6 +150,18 @@ def _add_labor_section(
             ["Mecha de seguridad por disparo", f"{_fmt(resultado.mecha_por_disparo_m)} m"],
             ["Mecha de seguridad total", f"{_fmt(resultado.mecha_total_m)} m"],
         ],
+    )
+
+    document.add_heading("Memoria de cálculo", level=2)
+    document.add_paragraph(
+        "Desglose paso a paso (fórmula → sustitución → resultado) de cada "
+        "cifra reportada arriba."
+    )
+    pasos = memoria_calculo(labor, resultado)
+    _add_table(
+        document,
+        ["Concepto", "Fórmula", "Sustitución", "Resultado"],
+        [[p.concepto, p.formula, p.sustitucion, p.resultado] for p in pasos],
     )
     document.add_paragraph("")
 
@@ -250,6 +272,12 @@ def build_polvorin_report(
                     f"{_fmt(polvorin.cantidad_almacenada_kg)} kg"
                     if polvorin.cantidad_almacenada_kg
                     else "No consignada",
+                ],
+                [
+                    "Radio de influencia",
+                    f"{_fmt(polvorin.radio_influencia_m)} m"
+                    if polvorin.radio_influencia_m
+                    else "No consignado",
                 ],
             ],
         )

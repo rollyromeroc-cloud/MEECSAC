@@ -11,9 +11,11 @@ from core.constants import (
     TIPOS_LABOR,
     TIPOS_ROCA,
 )
+from core.memoria import memoria_calculo
 from core.models import LaborMinera
 from core.voladura import calcular_programa
 from reports.docx_builder import build_voladura_report
+from viz.tunnel_plot import build_tunnel_figure
 
 st.set_page_config(page_title="Voladura", page_icon="🧨", layout="wide")
 require_login()
@@ -157,6 +159,28 @@ if a_eliminar != "(ninguna)" and st.button("Eliminar seleccionada"):
     idx = nombres.index(a_eliminar)
     st.session_state["labores"].pop(idx)
     st.rerun()
+
+st.header("Esquema de la labor")
+labor_a_graficar = st.selectbox("Labor a esquematizar", nombres, key="labor_esquema")
+idx_esquema = nombres.index(labor_a_graficar)
+fig_tunel = build_tunnel_figure(labores[idx_esquema], resultados[idx_esquema])
+st.plotly_chart(fig_tunel, use_container_width=True)
+
+st.header("📐 Memoria de cálculo")
+st.caption(
+    "Desglose paso a paso (fórmula → sustitución → resultado) de cada cifra "
+    "de la tabla de resultados — para auditar o sustentar el cálculo."
+)
+labor_a_detallar = st.selectbox("Labor a detallar", nombres, key="labor_memoria")
+idx_memoria = nombres.index(labor_a_detallar)
+pasos = memoria_calculo(labores[idx_memoria], resultados[idx_memoria])
+tabla_memoria = pd.DataFrame(
+    [
+        {"Concepto": p.concepto, "Fórmula": p.formula, "Sustitución": p.sustitucion, "Resultado": p.resultado}
+        for p in pasos
+    ]
+)
+st.dataframe(tabla_memoria, use_container_width=True, hide_index=True)
 
 st.header("Gráficos")
 

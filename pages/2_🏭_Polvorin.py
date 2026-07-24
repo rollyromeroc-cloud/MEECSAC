@@ -51,6 +51,11 @@ with st.expander("➕ Agregar polvorín", expanded=len(st.session_state["polvori
             norte_p = st.number_input("Norte UTM", value=8390000.0, format="%.2f")
         with c3:
             cantidad_kg = st.number_input("Cantidad almacenada (kg, opcional)", value=0.0)
+            radio_influencia = st.number_input(
+                "Radio de influencia (m, opcional)",
+                value=0.0,
+                help="Radio de seguridad alrededor del polvorín, se dibuja como círculo en el mapa (como en tus planos de referencia).",
+            )
 
         st.caption("Vértices del cerco perimétrico (opcional, para calcular área/perímetro):")
         vertices_df = st.data_editor(
@@ -76,6 +81,7 @@ with st.expander("➕ Agregar polvorín", expanded=len(st.session_state["polvori
                     norte_utm=norte_p,
                     vertices_cerco=vertices,
                     cantidad_almacenada_kg=cantidad_kg or None,
+                    radio_influencia_m=radio_influencia or None,
                 )
                 st.session_state["polvorines"].append(polvorin)
                 st.success(f"Polvorín '{nombre_p}' agregado.")
@@ -174,6 +180,16 @@ for polvorin in polvorines:
     if polvorin.vertices_cerco:
         cerco_latlon = [utm_a_lonlat(e, n) for e, n in polvorin.vertices_cerco]
         folium.Polygon(cerco_latlon, color="red", weight=2, fill=True, fill_opacity=0.1).add_to(mapa)
+    if polvorin.radio_influencia_m:
+        folium.Circle(
+            [lat, lon],
+            radius=polvorin.radio_influencia_m,
+            color="#2CA02C",
+            weight=2,
+            dash_array="6",
+            fill=False,
+            tooltip=f"Radio de influencia: {polvorin.radio_influencia_m:,.2f} m",
+        ).add_to(mapa)
 
 for punto in puntos:
     lat, lon = utm_a_lonlat(punto.este_utm, punto.norte_utm)
@@ -200,6 +216,20 @@ for punto in puntos:
                 dash_array="4",
                 tooltip=f"{distancia:,.0f} m",
             ).add_to(mapa)
+
+polvorines_con_radio = [p for p in polvorines if p.radio_influencia_m]
+if polvorines_con_radio:
+    st.caption("Leyenda de radios de influencia (círculos discontinuos verdes en el mapa):")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {"Polvorín": p.nombre, "Tipo": p.tipo, "Radio de influencia (m)": p.radio_influencia_m}
+                for p in polvorines_con_radio
+            ]
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
 
 st_folium(mapa, use_container_width=True, height=500)
 

@@ -113,6 +113,7 @@ class Polvorin:
     norte_utm: float = 0.0
     vertices_cerco: list[tuple[float, float]] = field(default_factory=list)
     cantidad_almacenada_kg: Optional[float] = None
+    radio_influencia_m: Optional[float] = None
 
 
 @dataclass
