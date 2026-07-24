@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from core.geometry import malla_tunel, perfil_herradura
+from core.geometry import malla_tunel, perfil_herradura, relacion_aspecto
 
 
 def test_perfil_herradura_dimensiones():
@@ -38,3 +38,30 @@ def test_malla_tunel_forma_y_extremos():
     for linea in longitudinales:
         assert linea[:, 0].min() == pytest.approx(0.0)
         assert linea[:, 0].max() == pytest.approx(66.0)
+
+
+def test_relacion_aspecto_preserva_escala_ancho_alto():
+    # ancho y alto deben quedar a escala real entre sí (misma relación,
+    # aunque los tres componentes estén normalizados por el máximo)
+    rx, ry, rz = relacion_aspecto(ancho=2.75, alto=2.75, longitud=66.0)
+    assert ry == pytest.approx(rz)  # sección cuadrada -> se ve cuadrada
+
+    rx2, ry2, rz2 = relacion_aspecto(ancho=1.77, alto=1.10, longitud=66.0)
+    assert ry2 / rz2 == pytest.approx(1.77 / 1.10)
+
+    # el componente máximo de cada terna normalizada vale 1.0
+    assert max(rx, ry, rz) == pytest.approx(1.0)
+    assert max(rx2, ry2, rz2) == pytest.approx(1.0)
+
+
+def test_relacion_aspecto_avance_no_mide_igual_que_seccion():
+    # con avance >> sección, el eje x debe verse claramente más largo
+    rx, ry, rz = relacion_aspecto(ancho=1.20, alto=1.20, longitud=66.0)
+    assert rx > max(ry, rz) * 2
+
+    # dos avances distintos deben producir proporciones distintas (no "todas
+    # miden igual" independientemente del valor real): con más avance, la
+    # sección ocupa relativamente menos del cuadro (eje x siempre normalizado a 1.0)
+    _, ry_corto, _ = relacion_aspecto(ancho=1.20, alto=1.20, longitud=1.10)
+    _, ry_largo, _ = relacion_aspecto(ancho=1.20, alto=1.20, longitud=66.0)
+    assert ry_largo < ry_corto

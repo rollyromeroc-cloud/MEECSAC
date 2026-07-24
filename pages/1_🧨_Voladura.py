@@ -12,7 +12,7 @@ from core.constants import (
     TIPOS_ROCA,
 )
 from core.memoria import memoria_calculo
-from core.models import LaborMinera
+from core.models import DatosGenerales, LaborMinera
 from core.voladura import calcular_programa
 from reports.docx_builder import build_voladura_report
 from viz.tunnel_plot import build_tunnel_figure
@@ -230,7 +230,30 @@ st.plotly_chart(fig_tonelaje, use_container_width=True)
 
 st.header("Reporte")
 titulo_proyecto = st.text_input("Título del proyecto para el reporte", value="Programa de perforación y voladura")
-buffer = build_voladura_report(labores, resultados, titulo_proyecto)
+
+with st.expander("Datos generales del informe (opcional)"):
+    st.caption(
+        "Se usan para armar el encabezado y la introducción del reporte Word "
+        "(estilo informe técnico). Deja en blanco lo que no aplique — nunca "
+        "se inventa un dato."
+    )
+    dg = st.session_state.setdefault("datos_generales", DatosGenerales())
+    c1, c2 = st.columns(2)
+    with c1:
+        dg.nombre_concesion = st.text_input(
+            "Nombre de la concesión / proyecto", value=dg.nombre_concesion,
+            placeholder='Ej. Concesión Minera "Virgen de la Puerta I"',
+        )
+        dg.codigo_concesion = st.text_input("Código de concesión", value=dg.codigo_concesion)
+        dg.empresa = st.text_input("Empresa / razón social", value=dg.empresa)
+        dg.ruc = st.text_input("RUC", value=dg.ruc)
+    with c2:
+        dg.departamento = st.text_input("Departamento", value=dg.departamento)
+        dg.provincia = st.text_input("Provincia", value=dg.provincia)
+        dg.distrito = st.text_input("Distrito", value=dg.distrito)
+        dg.periodo_meses = st.number_input("Periodo del programa (meses)", min_value=1, value=dg.periodo_meses, step=1)
+
+buffer = build_voladura_report(labores, resultados, titulo_proyecto, st.session_state["datos_generales"])
 st.download_button(
     "⬇️ Descargar reporte Word",
     data=buffer,

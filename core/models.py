@@ -134,3 +134,22 @@ class ResultadoDistancia:
     distancia_real_m: float
     distancia_minima_m: float
     cumple: bool
+
+
+@dataclass
+class DatosGenerales:
+    """Encabezado del informe técnico: identifica el proyecto/concesión.
+
+    Todos los campos son opcionales — si se dejan vacíos, el reporte Word
+    simplemente omite esa línea del encabezado en vez de mostrar un dato
+    inventado.
+    """
+
+    nombre_concesion: str = ""
+    codigo_concesion: str = ""
+    empresa: str = ""
+    ruc: str = ""
+    departamento: str = ""
+    provincia: str = ""
+    distrito: str = ""
+    periodo_meses: int = 6

@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
 
-from core.geometry import malla_tunel
+from core.geometry import malla_tunel, relacion_aspecto
 from core.models import LaborMinera, ResultadoVoladura
 
 # Paleta fija (no se cicla): color de identidad para la sección del túnel,
@@ -146,14 +146,16 @@ def build_tunnel_figure(
         )
     )
 
+    ratio_x, ratio_y, ratio_z = relacion_aspecto(labor.ancho_m, labor.alto_m, longitud)
     fig.update_layout(
         title=f"Esquema — {labor.tipo}: {labor.nombre}",
         scene=dict(
             xaxis=dict(title="Avance (m)", showbackground=False),
             yaxis=dict(title="", showbackground=False, visible=False),
             zaxis=dict(title="", showbackground=False, visible=False),
-            aspectmode="auto",
-            camera=dict(eye=dict(x=1.3, y=1.3, z=0.8)),
+            aspectmode="manual",
+            aspectratio=dict(x=ratio_x, y=ratio_y, z=ratio_z),
+            camera=dict(eye=dict(x=0.75, y=0.75, z=0.45)),
         ),
         legend=dict(orientation="h", yanchor="bottom", y=0.01, x=0.01),
         margin=dict(l=0, r=0, t=40, b=30),

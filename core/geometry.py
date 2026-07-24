@@ -69,3 +69,25 @@ def malla_tunel(
     ]
 
     return {"anillos": anillos, "longitudinales": longitudinales, "perfil": perfil}
+
+
+def relacion_aspecto(ancho: float, alto: float, longitud: float) -> tuple[float, float, float]:
+    """Proporciones (x, y, z), normalizadas para el `aspectratio` de la
+    escena 3D (el eje más largo siempre vale 1.0).
+
+    Ancho y alto se mantienen a escala real entre sí (para que, por ejemplo,
+    una labor de 2.75×2.75 se vea más "cuadrada" que una de 1.77×1.10). El
+    avance (eje x) se comprime logarítmicamente respecto al tamaño de la
+    sección: crece con la longitud real (dos labores con distinto avance se
+    ven visiblemente distintas), pero sin volverse una línea inmanejable
+    para avances de decenas de metros con secciones de ~1-3 m.
+
+    Se normaliza por el componente máximo para que la cámara (eye fijo) dé
+    un encuadre consistente sin importar las dimensiones absolutas de la
+    labor — solo importan las proporciones relativas entre ancho/alto/avance.
+    """
+    escala_seccion = max(ancho, alto, 1e-6)
+    ratio_x = escala_seccion * (1.0 + np.log1p(longitud / escala_seccion))
+    ratio_y, ratio_z = ancho, alto
+    maximo = max(ratio_x, ratio_y, ratio_z, 1e-6)
+    return ratio_x / maximo, ratio_y / maximo, ratio_z / maximo

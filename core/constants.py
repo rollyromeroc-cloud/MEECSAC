@@ -64,3 +64,76 @@ TIPOS_PUNTO_RIESGO = [
 
 ZONA_UTM_DEFAULT = 18
 HEMISFERIO_DEFAULT = "S"
+
+# Descripciones genéricas por tipo de labor, para la memoria descriptiva
+# (introducción, programa de actividades, especificaciones técnicas) del
+# reporte Word — inspiradas en la redacción típica de un informe técnico de
+# perforación y voladura, parametrizadas para cualquier conjunto de labores.
+DESCRIPCION_TIPO_LABOR = {
+    "Galería": (
+        "Son labores mineras de desarrollo de carácter horizontal, destinadas "
+        "al acceso, reconocimiento y seguimiento del cuerpo mineralizado, así "
+        "como a facilitar el transporte de mineral, desmonte, personal, "
+        "materiales y equipos."
+    ),
+    "Cortada": (
+        "Son labores mineras horizontales ejecutadas para interceptar el "
+        "cuerpo mineralizado, permitiendo el acceso directo a las zonas de "
+        "explotación y el avance de los frentes de producción."
+    ),
+    "Estocada": (
+        "Son labores mineras horizontales de preparación, ejecutadas "
+        "lateralmente desde una labor principal, que permiten ampliar los "
+        "frentes de trabajo y el acceso a la estructura mineralizada."
+    ),
+    "Rampa": (
+        "Son labores mineras de desarrollo con pendiente controlada, "
+        "destinadas a comunicar niveles y permitir el tránsito de equipos, "
+        "personal y material entre ellos."
+    ),
+    "Pique": (
+        "Son labores mineras de desarrollo vertical o subvertical destinadas "
+        "a comunicar diferentes niveles de trabajo, facilitar el tránsito del "
+        "personal, mejorar la ventilación y permitir el transporte de "
+        "materiales y mineral."
+    ),
+    "Chimenea": (
+        "Son labores mineras de desarrollo vertical o subvertical destinadas "
+        "a mejorar la ventilación, la comunicación entre niveles y la "
+        "seguridad operacional de la unidad minera."
+    ),
+    "Tajo": (
+        "Es la labor minera de explotación mediante la cual se extrae el "
+        "mineral económicamente explotable del yacimiento."
+    ),
+}
+
+# Frase corta de propósito, usada en "Se ha programado el desarrollo de
+# LABOR, con sección A × B, [propósito]" y en el listado del Programa de
+# Actividades por etapa.
+PROPOSITO_TIPO_LABOR = {
+    "Galería": (
+        "permitiendo la continuidad de las labores de preparación y "
+        "explotación, así como la comunicación entre los diferentes frentes "
+        "de trabajo"
+    ),
+    "Cortada": (
+        "permitiendo la continuidad de las labores de explotación y la "
+        "recuperación del mineral económicamente explotable"
+    ),
+    "Estocada": "permitiendo ampliar los frentes de trabajo y el acceso a la estructura mineralizada",
+    "Rampa": "permitiendo el tránsito de equipos y personal entre niveles",
+    "Pique": "contribuyendo a mejorar la comunicación entre niveles y la operatividad de la mina",
+    "Chimenea": "destinada a mejorar la ventilación, la comunicación y la seguridad operacional",
+    "Tajo": "permitiendo la extracción del mineral económicamente explotable",
+}
+
+ACTIVIDADES_CICLICAS = [
+    "Perforación y Voladura",
+    "Carguío y extracción",
+    "Sostenimiento y Limpieza",
+    "Desquinche y Relleno",
+    "Transporte",
+]
+
+ORDEN_ETAPAS = ["Desarrollo", "Preparación", "Explotación"]
