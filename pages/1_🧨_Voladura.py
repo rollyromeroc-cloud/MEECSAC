@@ -15,7 +15,7 @@ from core.memoria import memoria_calculo
 from core.models import DatosGenerales, LaborMinera
 from core.voladura import calcular_programa
 from reports.docx_builder import build_voladura_report
-from viz.tunnel_plot import build_tunnel_figure
+from viz.tunnel_plot import build_tunnel_figure, build_tunnel_figure_solido
 
 st.set_page_config(page_title="Voladura", page_icon="🧨", layout="wide")
 require_login()
@@ -161,10 +161,21 @@ if a_eliminar != "(ninguna)" and st.button("Eliminar seleccionada"):
     st.rerun()
 
 st.header("Esquema de la labor")
-labor_a_graficar = st.selectbox("Labor a esquematizar", nombres, key="labor_esquema")
+c_lab, c_estilo = st.columns([2, 1])
+with c_lab:
+    labor_a_graficar = st.selectbox("Labor a esquematizar", nombres, key="labor_esquema")
+with c_estilo:
+    estilo_esquema = st.radio(
+        "Estilo", ["Wireframe", "Sólido"], key="estilo_esquema", horizontal=True
+    )
 idx_esquema = nombres.index(labor_a_graficar)
-fig_tunel = build_tunnel_figure(labores[idx_esquema], resultados[idx_esquema])
+constructor_figura = build_tunnel_figure_solido if estilo_esquema == "Sólido" else build_tunnel_figure
+fig_tunel = constructor_figura(labores[idx_esquema], resultados[idx_esquema])
 st.plotly_chart(fig_tunel, use_container_width=True)
+st.caption(
+    "🩶 Gris = tramo ya existente · 🔵 Azul = avance proyectado · "
+    "línea punteada = frente actual."
+)
 
 st.header("📐 Memoria de cálculo")
 st.caption(
@@ -253,7 +264,10 @@ with st.expander("Datos generales del informe (opcional)"):
         dg.distrito = st.text_input("Distrito", value=dg.distrito)
         dg.periodo_meses = st.number_input("Periodo del programa (meses)", min_value=1, value=dg.periodo_meses, step=1)
 
-buffer = build_voladura_report(labores, resultados, titulo_proyecto, st.session_state["datos_generales"])
+estilo_reporte = "solido" if estilo_esquema == "Sólido" else "wireframe"
+buffer = build_voladura_report(
+    labores, resultados, titulo_proyecto, st.session_state["datos_generales"], estilo_reporte
+)
 st.download_button(
     "⬇️ Descargar reporte Word",
     data=buffer,

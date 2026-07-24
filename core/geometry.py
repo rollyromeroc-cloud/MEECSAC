@@ -44,9 +44,14 @@ def malla_tunel(
     longitud: float,
     n_anillos: int = 14,
     n_arco: int = 24,
+    x_inicio: float = 0.0,
 ) -> dict:
-    """Anillos (secciones transversales) y líneas longitudinales de un túnel
-    extruido a lo largo del eje X, listos para dibujarse como wireframe 3D.
+    """Anillos (secciones transversales) y líneas longitudinales de un tramo
+    de túnel extruido a lo largo del eje X (de `x_inicio` a
+    `x_inicio + longitud`), listos para dibujarse como wireframe 3D.
+
+    `x_inicio` permite encadenar dos tramos (p. ej. longitud existente y
+    avance proyectado) sin recalcular el perfil.
 
     Devuelve un dict con:
       - "anillos": lista de arrays (n_perfil, 3) con columnas (x, y, z)
@@ -55,7 +60,7 @@ def malla_tunel(
       - "perfil": el contorno 2D usado (y, z)
     """
     perfil = perfil_herradura(ancho, alto, n_arco=n_arco)
-    xs = np.linspace(0.0, longitud, n_anillos)
+    xs = np.linspace(x_inicio, x_inicio + longitud, n_anillos)
 
     anillos = [
         np.column_stack([np.full(len(perfil), x), perfil[:, 0], perfil[:, 1]])
@@ -69,6 +74,77 @@ def malla_tunel(
     ]
 
     return {"anillos": anillos, "longitudinales": longitudinales, "perfil": perfil}
+
+
+def _anillos_de_tramo(perfil: np.ndarray, xs: np.ndarray) -> list[np.ndarray]:
+    return [
+        np.column_stack([np.full(len(perfil), x), perfil[:, 0], perfil[:, 1]])
+        for x in xs
+    ]
+
+
+def malla_solida_tunel(
+    ancho: float,
+    alto: float,
+    longitud_existente: float,
+    avance_proyectado: float,
+    n_anillos_existente: int = 8,
+    n_anillos_proyectado: int = 14,
+    n_arco: int = 24,
+) -> dict:
+    """Vértices y triángulos de una superficie sólida (tubo abierto tipo
+    herradura) para el tramo existente y el proyectado, con una etiqueta de
+    tramo por triángulo para poder colorearlos distinto.
+
+    Devuelve un dict con:
+      - "vertices": array (N, 3) de todos los vértices (x, y, z)
+      - "triangulos": array (M, 3) de índices de vértice por triángulo
+      - "tramo_por_triangulo": lista de "existente"/"proyectado" (largo M)
+      - "x_frontera": x donde termina lo existente y empieza lo proyectado
+    """
+    perfil = perfil_herradura(ancho, alto, n_arco=n_arco)
+    n_perfil = len(perfil)
+
+    tramos_xs = []
+    if longitud_existente > 0:
+        tramos_xs.append(("existente", np.linspace(0.0, longitud_existente, max(n_anillos_existente, 2))))
+    xs_proy = np.linspace(
+        longitud_existente, longitud_existente + avance_proyectado, max(n_anillos_proyectado, 2)
+    )
+    if tramos_xs:
+        xs_proy = xs_proy[1:]  # evita duplicar el anillo de empalme
+    tramos_xs.append(("proyectado", xs_proy))
+
+    vertices: list[tuple[float, float, float]] = []
+    anillos_idx: list[list[int]] = []
+    anillo_tramo: list[str] = []
+    for nombre_tramo, xs in tramos_xs:
+        for x in xs:
+            idx_inicio = len(vertices)
+            vertices.extend((x, y, z) for y, z in perfil)
+            anillos_idx.append(list(range(idx_inicio, idx_inicio + n_perfil)))
+            anillo_tramo.append(nombre_tramo)
+
+    triangulos: list[tuple[int, int, int]] = []
+    tramo_por_triangulo: list[str] = []
+    for r in range(len(anillos_idx) - 1):
+        ring_a, ring_b = anillos_idx[r], anillos_idx[r + 1]
+        # el tramo del segmento es el del anillo de llegada (evita marcar el
+        # anillo de empalme, que pertenece a "existente", como "proyectado")
+        tramo = anillo_tramo[r + 1]
+        for j in range(n_perfil - 1):
+            a0, a1 = ring_a[j], ring_a[j + 1]
+            b0, b1 = ring_b[j], ring_b[j + 1]
+            triangulos.append((a0, a1, b0))
+            triangulos.append((a1, b1, b0))
+            tramo_por_triangulo.extend([tramo, tramo])
+
+    return {
+        "vertices": np.array(vertices),
+        "triangulos": np.array(triangulos),
+        "tramo_por_triangulo": tramo_por_triangulo,
+        "x_frontera": longitud_existente,
+    }
 
 
 def relacion_aspecto(ancho: float, alto: float, longitud: float) -> tuple[float, float, float]:

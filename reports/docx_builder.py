@@ -31,7 +31,7 @@ from core.models import (
 )
 from core.polvorin import area_shoelace, perimetro
 from reports.narrativa import parrafos_introduccion, programa_actividades, secuencia_operativa
-from viz.tunnel_plot import build_tunnel_figure
+from viz.tunnel_plot import build_tunnel_figure, build_tunnel_figure_solido
 
 
 def _fmt(value, decimals=2) -> str:
@@ -102,7 +102,11 @@ def _add_encabezado_informe(document: Document, datos: DatosGenerales, titulo_pr
 
 
 def _add_labor_section(
-    document: Document, numero: int, labor: LaborMinera, resultado: ResultadoVoladura
+    document: Document,
+    numero: int,
+    labor: LaborMinera,
+    resultado: ResultadoVoladura,
+    estilo_esquema: str = "wireframe",
 ) -> None:
     document.add_heading(f"{numero}. {labor.tipo.upper()}: {labor.nombre}", level=1)
 
@@ -118,7 +122,8 @@ def _add_labor_section(
         document.add_paragraph(labor.observaciones)
 
     try:
-        png_bytes = build_tunnel_figure(labor, resultado).to_image(
+        constructor_figura = build_tunnel_figure_solido if estilo_esquema == "solido" else build_tunnel_figure
+        png_bytes = constructor_figura(labor, resultado).to_image(
             format="png", width=900, height=550, scale=2
         )
         document.add_picture(BytesIO(png_bytes), width=Inches(6))
@@ -365,6 +370,7 @@ def build_voladura_report(
     resultados: list[ResultadoVoladura],
     titulo_proyecto: str = "Programa de perforación y voladura",
     datos: DatosGenerales | None = None,
+    estilo_esquema: str = "wireframe",
 ) -> BytesIO:
     datos = datos or DatosGenerales()
     document = Document()
@@ -412,7 +418,7 @@ def build_voladura_report(
 
     document.add_heading("Especificaciones Técnicas del Programa y Diseño de Voladura", level=1)
     for i, (labor, resultado) in enumerate(zip(labores, resultados), start=1):
-        _add_labor_section(document, i, labor, resultado)
+        _add_labor_section(document, i, labor, resultado, estilo_esquema)
 
     _add_cuadros_consolidados(document, labores, resultados)
 

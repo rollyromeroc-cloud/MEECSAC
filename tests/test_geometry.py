@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from core.geometry import malla_tunel, perfil_herradura, relacion_aspecto
+from core.geometry import malla_solida_tunel, malla_tunel, perfil_herradura, relacion_aspecto
 
 
 def test_perfil_herradura_dimensiones():
@@ -38,6 +38,44 @@ def test_malla_tunel_forma_y_extremos():
     for linea in longitudinales:
         assert linea[:, 0].min() == pytest.approx(0.0)
         assert linea[:, 0].max() == pytest.approx(66.0)
+
+
+def test_malla_tunel_respeta_x_inicio():
+    malla = malla_tunel(ancho=2.0, alto=2.0, longitud=10.0, n_anillos=4, x_inicio=50.0)
+    anillos = malla["anillos"]
+    assert anillos[0][:, 0].max() == pytest.approx(50.0)
+    assert anillos[-1][:, 0].max() == pytest.approx(60.0)
+
+
+def test_malla_solida_tunel_sin_tramo_existente():
+    malla = malla_solida_tunel(
+        ancho=1.77, alto=1.10, longitud_existente=0.0, avance_proyectado=66.0,
+        n_anillos_proyectado=6,
+    )
+    assert set(malla["tramo_por_triangulo"]) == {"proyectado"}
+    assert malla["triangulos"].max() < len(malla["vertices"])
+    assert malla["x_frontera"] == 0.0
+
+
+def test_malla_solida_tunel_con_ambos_tramos():
+    malla = malla_solida_tunel(
+        ancho=1.77, alto=1.10, longitud_existente=9.0, avance_proyectado=66.0,
+        n_anillos_existente=4, n_anillos_proyectado=6,
+    )
+    tramos = set(malla["tramo_por_triangulo"])
+    assert tramos == {"existente", "proyectado"}
+    assert malla["x_frontera"] == pytest.approx(9.0)
+    # todos los índices de triángulo deben apuntar a vértices válidos
+    assert malla["triangulos"].max() < len(malla["vertices"])
+    # los vértices del tramo existente no deben pasar de x=9.0
+    vertices = malla["vertices"]
+    triangulos = malla["triangulos"]
+    for tri, tramo in zip(triangulos, malla["tramo_por_triangulo"]):
+        xs_tri = vertices[list(tri), 0]
+        if tramo == "existente":
+            assert xs_tri.max() <= 9.0 + 1e-9
+        else:
+            assert xs_tri.min() >= 9.0 - 1e-9
 
 
 def test_relacion_aspecto_preserva_escala_ancho_alto():
