@@ -154,3 +154,18 @@ TIPOS_SUCAMEC_GUIAS = [
     {"categoria": "Accesorios", "producto": "Mecha de seguridad", "capacidad_por_guia": 100000, "unidad": "M"},
     {"categoria": "Accesorios", "producto": "Detonador ensamblado", "capacidad_por_guia": 60000, "unidad": "PZAS"},
 ]
+
+# Texto de unidad tal como aparece en la celda "UNIDADES DE MEDIDA" del
+# Formato N.° 23 SUCAMEC (distinto de la abreviatura usada arriba).
+UNIDAD_SUCAMEC_TEXTO = {"KG": "KILOGRAMOS", "M": "METROS", "PZAS": "UNIDADES"}
+
+# Plantillas oficiales (modelo ya llenado por el usuario) del Formato N.° 23:
+# tipo 1 = FAMESA -> Polvorin (una por categoria, con el origen FAMESA ya
+# correcto en cada una); tipo 2 = Polvorin -> Unidad minera. Se usan tal cual
+# vienen, solo se reemplazan producto/cantidad/unidades y, en tipo 2, los
+# datos del polvorin (origen) y de la concesion (destino).
+PLANTILLA_GUIA_TIPO1 = {
+    "Explosivos": "Formato gts TIPO 1 FAMESA LIMA EXPLOSIVOS.xlsx",
+    "Accesorios": "Formato gts TIPO 1 FAMESA LIMA ACCESORIOS.xlsx",
+}
+PLANTILLA_GUIA_TIPO2 = "Formato gts TIPO 2.xlsx"

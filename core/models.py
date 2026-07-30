@@ -153,3 +153,37 @@ class DatosGenerales:
     provincia: str = ""
     distrito: str = ""
     periodo_meses: int = 6
+
+
+@dataclass
+class PolvorinGuiaSucamec:
+    """Datos de un polvorin para completar las guias SUCAMEC (Formato N.° 23,
+    tipo 1 FAMESA-Polvorin y tipo 2 Polvorin-Unidad minera).
+
+    Un mismo polvorin puede tener autorizacion de almacenamiento de
+    explosivos, de accesorios, o ambas; se usa la resolucion que corresponda
+    segun la categoria del producto de cada guia. La concesion/unidad minera
+    de destino (tipo 2) se guarda por polvorin porque un mismo polvorin puede
+    abastecer a una concesion distinta a la de otro polvorin.
+    """
+
+    nombre: str
+    direccion: str = ""
+    distrito: str = ""
+    provincia: str = ""
+    departamento: str = ""
+    resolucion_explosivos_numero: str = ""
+    resolucion_explosivos_fecha: str = ""  # DD/MM/AAAA
+    resolucion_accesorios_numero: str = ""
+    resolucion_accesorios_fecha: str = ""  # DD/MM/AAAA
+    concesion_nombre: str = ""
+    concesion_codigo: str = ""
+    concesion_distrito: str = ""
+    concesion_provincia: str = ""
+    concesion_departamento: str = ""
+
+    def resolucion_para(self, categoria: str) -> tuple[str, str]:
+        """Devuelve (numero, fecha) de la resolucion segun categoria del producto."""
+        if categoria == "Explosivos":
+            return self.resolucion_explosivos_numero, self.resolucion_explosivos_fecha
+        return self.resolucion_accesorios_numero, self.resolucion_accesorios_fecha
