@@ -32,16 +32,17 @@ st.caption(
     "(ej. FAMESA) — eso se agregará en una siguiente etapa."
 )
 
-# --- Polvorines: datos de origen/destino para los Excel SUCAMEC ---
+# --- Polvorines: solo la concesión de destino se edita aquí; la resolución,
+# dirección y demás datos del polvorín se mantienen tal cual el Excel base
+# (el bundled por defecto, o el que subas si ese polvorín tiene uno propio).
 st.divider()
 st.markdown("### Polvorines")
 st.caption(
-    "Datos de cada polvorín para completar los Excel SUCAMEC (tipo 1 FAMESA→Polvorín "
-    "y tipo 2 Polvorín→Unidad minera). Un mismo polvorín puede tener resolución de "
-    "almacenamiento de explosivos, de accesorios, o ambas; se usa la que corresponda "
-    "según el tipo de producto de cada guía. La concesión/unidad minera de destino se "
-    "guarda por polvorín, porque un polvorín puede abastecer a una concesión distinta "
-    "a la de otro."
+    "La resolución, dirección y ubicación del polvorín (origen en tipo 2, destino en "
+    "tipo 1) se mantienen exactamente como están en el Excel base — no se editan aquí. "
+    "Si tienes más de un polvorín con datos distintos, sube su propio par de plantillas "
+    "ya llenadas; si no subes nada, se usa la plantilla por defecto de la app. La "
+    "concesión/unidad minera de destino (solo tipo 2) sí se completa aquí, por polvorín."
 )
 
 n_polvorines = st.number_input(
@@ -55,21 +56,18 @@ for i in range(int(n_polvorines)):
         nombre_polvorin = st.text_input(
             "Nombre del polvorín", value=f"Polvorín N.° {i + 1}", key=f"polv_nombre_{i}",
         )
-        direccion = st.text_input("Dirección", key=f"polv_direccion_{i}")
-        c1, c2, c3 = st.columns(3)
-        distrito = c1.text_input("Distrito", key=f"polv_distrito_{i}")
-        provincia = c2.text_input("Provincia", key=f"polv_provincia_{i}")
-        departamento = c3.text_input("Región/Departamento", key=f"polv_departamento_{i}")
 
-        st.markdown("**Resolución de almacenamiento — Explosivos**")
-        ce1, ce2 = st.columns(2)
-        res_exp_num = ce1.text_input("N.° de resolución", key=f"polv_res_exp_num_{i}")
-        res_exp_fecha = ce2.text_input("Fecha (DD/MM/AAAA)", key=f"polv_res_exp_fecha_{i}")
-
-        st.markdown("**Resolución de almacenamiento — Accesorios**")
-        ca1, ca2 = st.columns(2)
-        res_acc_num = ca1.text_input("N.° de resolución", key=f"polv_res_acc_num_{i}")
-        res_acc_fecha = ca2.text_input("Fecha (DD/MM/AAAA)", key=f"polv_res_acc_fecha_{i}")
+        st.markdown("**Plantillas base (opcional — si no subes, se usa la de la app)**")
+        pt1, pt2, pt3 = st.columns(3)
+        archivo_tipo1_explosivos = pt1.file_uploader(
+            "Base TIPO 1 — Explosivos", type=["xlsx"], key=f"polv_plantilla_t1e_{i}",
+        )
+        archivo_tipo1_accesorios = pt2.file_uploader(
+            "Base TIPO 1 — Accesorios", type=["xlsx"], key=f"polv_plantilla_t1a_{i}",
+        )
+        archivo_tipo2 = pt3.file_uploader(
+            "Base TIPO 2", type=["xlsx"], key=f"polv_plantilla_t2_{i}",
+        )
 
         st.markdown("**Concesión / unidad minera de destino (solo tipo 2)**")
         cm1, cm2 = st.columns(2)
@@ -82,14 +80,9 @@ for i in range(int(n_polvorines)):
 
         polvorin = PolvorinGuiaSucamec(
             nombre=nombre_polvorin or f"Polvorín N.° {i + 1}",
-            direccion=direccion,
-            distrito=distrito,
-            provincia=provincia,
-            departamento=departamento,
-            resolucion_explosivos_numero=res_exp_num,
-            resolucion_explosivos_fecha=res_exp_fecha,
-            resolucion_accesorios_numero=res_acc_num,
-            resolucion_accesorios_fecha=res_acc_fecha,
+            plantilla_tipo1_explosivos=archivo_tipo1_explosivos.getvalue() if archivo_tipo1_explosivos else None,
+            plantilla_tipo1_accesorios=archivo_tipo1_accesorios.getvalue() if archivo_tipo1_accesorios else None,
+            plantilla_tipo2=archivo_tipo2.getvalue() if archivo_tipo2 else None,
             concesion_nombre=concesion_nombre,
             concesion_codigo=concesion_codigo,
             concesion_distrito=concesion_distrito,
@@ -208,8 +201,16 @@ else:
             "9 pares de Excel para ese producto, cada uno con la cantidad exacta de esa guía "
             "(las completas con la capacidad máxima, la última con el restante)."
         )
+        archivo_firma = st.file_uploader(
+            "Firma (imagen, opcional)",
+            type=["png", "jpg", "jpeg"],
+            key="guias_firma",
+            help="Se inserta en la misma posición (sobre 'FIRMA O HUELLA DIGITAL DEL "
+            "REPRESENTANTE LEGAL') en todos los Excel generados.",
+        )
         if st.button("Generar Excel SUCAMEC (.zip)", icon=":material/table_view:"):
-            zip_buffer, resumen = generar_zip_guias(productos_guia)
+            firma_bytes = archivo_firma.getvalue() if archivo_firma else None
+            zip_buffer, resumen = generar_zip_guias(productos_guia, firma_bytes)
             st.session_state.guias_zip = zip_buffer.getvalue()
             st.session_state.guias_resumen = resumen
 

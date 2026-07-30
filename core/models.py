@@ -160,30 +160,21 @@ class PolvorinGuiaSucamec:
     """Datos de un polvorin para completar las guias SUCAMEC (Formato N.° 23,
     tipo 1 FAMESA-Polvorin y tipo 2 Polvorin-Unidad minera).
 
-    Un mismo polvorin puede tener autorizacion de almacenamiento de
-    explosivos, de accesorios, o ambas; se usa la resolucion que corresponda
-    segun la categoria del producto de cada guia. La concesion/unidad minera
-    de destino (tipo 2) se guarda por polvorin porque un mismo polvorin puede
-    abastecer a una concesion distinta a la de otro polvorin.
+    La resolucion, direccion y demas datos del polvorin (origen en tipo 2,
+    destino en tipo 1) NO se sobreescriben: se mantienen tal cual estan en el
+    Excel base/modelo de ese polvorin (por defecto el bundled con la app; si
+    hay mas de un polvorin con datos distintos, cada uno sube su propio par
+    de plantillas ya llenadas). Solo se completa automaticamente la
+    concesion/unidad minera de destino (tipo 2) y el producto/cantidad/
+    unidades de cada guia.
     """
 
     nombre: str
-    direccion: str = ""
-    distrito: str = ""
-    provincia: str = ""
-    departamento: str = ""
-    resolucion_explosivos_numero: str = ""
-    resolucion_explosivos_fecha: str = ""  # DD/MM/AAAA
-    resolucion_accesorios_numero: str = ""
-    resolucion_accesorios_fecha: str = ""  # DD/MM/AAAA
+    plantilla_tipo1_explosivos: bytes | None = None  # None = usar la plantilla por defecto
+    plantilla_tipo1_accesorios: bytes | None = None
+    plantilla_tipo2: bytes | None = None
     concesion_nombre: str = ""
     concesion_codigo: str = ""
     concesion_distrito: str = ""
     concesion_provincia: str = ""
     concesion_departamento: str = ""
-
-    def resolucion_para(self, categoria: str) -> tuple[str, str]:
-        """Devuelve (numero, fecha) de la resolucion segun categoria del producto."""
-        if categoria == "Explosivos":
-            return self.resolucion_explosivos_numero, self.resolucion_explosivos_fecha
-        return self.resolucion_accesorios_numero, self.resolucion_accesorios_fecha
