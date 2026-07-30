@@ -137,3 +137,20 @@ ACTIVIDADES_CICLICAS = [
 ]
 
 ORDEN_ETAPAS = ["Desarrollo", "Preparación", "Explotación"]
+
+# Capacidad maxima por guia de remision segun SUCAMEC, por tipo generico de
+# explosivo/accesorio (no por marca comercial). Valores de referencia; ante
+# cualquier discrepancia con la guia/permiso vigente, prevalece el documento
+# oficial. Mas adelante se ampliara con variantes comerciales (p.ej. FAMESA).
+TIPOS_SUCAMEC_GUIAS = [
+    {"categoria": "Explosivos", "producto": "Dinamita", "capacidad_por_guia": 575, "unidad": "KG"},
+    {"categoria": "Explosivos", "producto": "Emulsión o hidrogel encartuchada", "capacidad_por_guia": 575, "unidad": "KG"},
+    {"categoria": "Explosivos", "producto": "ANFO", "capacidad_por_guia": 600, "unidad": "KG"},
+    {"categoria": "Accesorios", "producto": "Cordón detonante", "capacidad_por_guia": 30000, "unidad": "M"},
+    {"categoria": "Accesorios", "producto": "Detonador de mecha o fulminante común", "capacidad_por_guia": 500000, "unidad": "PZAS"},
+    {"categoria": "Accesorios", "producto": "Cordón de ignición", "capacidad_por_guia": 30000, "unidad": "M"},
+    {"categoria": "Accesorios", "producto": "Conector para cordón de ignición", "capacidad_por_guia": 80000, "unidad": "PZAS"},
+    {"categoria": "Accesorios", "producto": "Detonador no eléctrico", "capacidad_por_guia": 15000, "unidad": "PZAS"},
+    {"categoria": "Accesorios", "producto": "Mecha de seguridad", "capacidad_por_guia": 100000, "unidad": "M"},
+    {"categoria": "Accesorios", "producto": "Detonador ensamblado", "capacidad_por_guia": 60000, "unidad": "PZAS"},
+]

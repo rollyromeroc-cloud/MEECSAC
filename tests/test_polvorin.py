@@ -1,7 +1,7 @@
 import pytest
 
 from core.models import Polvorin, PuntoRiesgo
-from core.polvorin import area_shoelace, distancia_utm, evaluar_distancias
+from core.polvorin import area_shoelace, calcular_guias, distancia_utm, evaluar_distancias
 
 
 def test_area_shoelace_cuadrado():
@@ -42,3 +42,46 @@ def test_polvorin_radio_influencia_opcional():
 
     con_radio = Polvorin(nombre="Polvorín 1", este_utm=0, norte_utm=0, radio_influencia_m=30.23)
     assert con_radio.radio_influencia_m == pytest.approx(30.23)
+
+
+# Casos dorados tomados de un formato real de guías de polvorín (SUCAMEC):
+# Emulsión/hidrogel: capacidad 575 kg/guía, solicitado 4825 kg -> 8 guías + 1 restante = 9.
+# Conector para cordón de ignición: capacidad 80000 pzas, solicitado 2500 -> 0 + 1 = 1.
+# Mecha de seguridad: capacidad 100000 m, solicitado 18000 -> 0 + 1 = 1.
+def test_calcular_guias_emulsion_con_restante():
+    resultado = calcular_guias(cantidad_solicitada=4825, capacidad_por_guia=575)
+    assert resultado["guias_completas"] == 8
+    assert resultado["cantidad_guias_completas"] == pytest.approx(4600)
+    assert resultado["guia_restante"] == 1
+    assert resultado["cantidad_restante"] == pytest.approx(225)
+    assert resultado["guias_totales"] == 9
+
+
+def test_calcular_guias_menor_a_una_capacidad():
+    resultado = calcular_guias(cantidad_solicitada=2500, capacidad_por_guia=80000)
+    assert resultado["guias_completas"] == 0
+    assert resultado["guia_restante"] == 1
+    assert resultado["guias_totales"] == 1
+
+
+def test_calcular_guias_exacta_sin_restante():
+    # Multiplo exacto de la capacidad: no debe agregar una guia de mas.
+    resultado = calcular_guias(cantidad_solicitada=1150, capacidad_por_guia=575)
+    assert resultado["guias_completas"] == 2
+    assert resultado["guia_restante"] == 0
+    assert resultado["guias_totales"] == 2
+
+
+def test_calcular_guias_dos_variantes_no_se_combinan():
+    # Ej. del usuario: Emulnor 3000 y Emulnor 5000, cada uno pide 9 guias
+    # (8 completas + 1 incompleta) -> el total es 18, no se optimizan juntas.
+    variante_a = calcular_guias(cantidad_solicitada=4825, capacidad_por_guia=575)
+    variante_b = calcular_guias(cantidad_solicitada=4825, capacidad_por_guia=575)
+    assert variante_a["guias_totales"] == 9
+    assert variante_b["guias_totales"] == 9
+    assert variante_a["guias_totales"] + variante_b["guias_totales"] == 18
+
+
+def test_calcular_guias_cantidad_cero():
+    resultado = calcular_guias(cantidad_solicitada=0, capacidad_por_guia=575)
+    assert resultado["guias_totales"] == 0

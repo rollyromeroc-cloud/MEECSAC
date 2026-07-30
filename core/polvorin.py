@@ -51,6 +51,35 @@ def perimetro(vertices: list[tuple[float, float]]) -> float:
     return total
 
 
+def calcular_guias(cantidad_solicitada: float, capacidad_por_guia: float) -> dict:
+    """Replica el cálculo de guías de remisión por tipo de explosivo/accesorio
+    (una guía cubre como máximo `capacidad_por_guia` unidades; si sobra una
+    cantidad menor a la capacidad, se necesita una guía adicional incompleta).
+
+    Cada tipo/variante se calcula de forma independiente — dos productos que
+    requieren 9 guías cada uno suman 18 guías en total, no se combinan entre sí.
+    """
+    if capacidad_por_guia <= 0 or cantidad_solicitada <= 0:
+        return {
+            "guias_completas": 0,
+            "cantidad_guias_completas": 0.0,
+            "guia_restante": 0,
+            "cantidad_restante": 0.0,
+            "guias_totales": 0,
+        }
+    guias_completas = int(cantidad_solicitada // capacidad_por_guia)
+    cantidad_guias_completas = guias_completas * capacidad_por_guia
+    cantidad_restante = cantidad_solicitada - cantidad_guias_completas
+    guia_restante = 1 if cantidad_restante > 0 else 0
+    return {
+        "guias_completas": guias_completas,
+        "cantidad_guias_completas": cantidad_guias_completas,
+        "guia_restante": guia_restante,
+        "cantidad_restante": cantidad_restante,
+        "guias_totales": guias_completas + guia_restante,
+    }
+
+
 def evaluar_distancias(
     polvorin: Polvorin, puntos_riesgo: list[PuntoRiesgo]
 ) -> list[ResultadoDistancia]:
