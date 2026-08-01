@@ -76,11 +76,143 @@ def malla_tunel(
     return {"anillos": anillos, "longitudinales": longitudinales, "perfil": perfil}
 
 
-def _anillos_de_tramo(perfil: np.ndarray, xs: np.ndarray) -> list[np.ndarray]:
-    return [
-        np.column_stack([np.full(len(perfil), x), perfil[:, 0], perfil[:, 1]])
-        for x in xs
+def malla_tunel_pique(
+    diametro: float,
+    longitud: float,
+    n_anillos: int = 14,
+    n_arco: int = 24,
+    z_inicio: float = 0.0,
+) -> dict:
+    """Análogo de `malla_tunel` para Pique/Chimenea: anillos circulares
+    extruidos a lo largo del eje LOCAL Z (de `z_inicio` a
+    `z_inicio + longitud`), listos para dibujarse como wireframe 3D.
+    Mismo formato de retorno que `malla_tunel` (columnas x, y, z)."""
+    perfil = perfil_circular(diametro, n_arco=n_arco)
+    zs = np.linspace(z_inicio, z_inicio + longitud, n_anillos)
+
+    anillos = [
+        np.column_stack([perfil[:, 0], perfil[:, 1], np.full(len(perfil), z)])
+        for z in zs
     ]
+
+    indices_clave = [0, len(perfil) // 4, len(perfil) // 2]
+    longitudinales = [
+        np.column_stack([np.full(len(zs), perfil[idx, 0]), np.full(len(zs), perfil[idx, 1]), zs])
+        for idx in indices_clave
+    ]
+
+    return {"anillos": anillos, "longitudinales": longitudinales, "perfil": perfil}
+
+
+def _franja_triangulos(idx_a: list[int], idx_b: list[int], n_perfil: int) -> list[tuple[int, int, int]]:
+    """Triangula la franja entre dos anillos consecutivos de un perfil
+    CERRADO por wraparound de índices (la arista `n_perfil-1 -> 0` cierra
+    el contorno, generando el piso en la misma pasada que muros/arco, sin
+    duplicar ningún vértice). Orden de vértices elegido para que las
+    normales queden salientes."""
+    triangulos = []
+    for j in range(n_perfil):
+        jp1 = (j + 1) % n_perfil
+        a0, a1 = idx_a[j], idx_a[jp1]
+        b0, b1 = idx_b[j], idx_b[jp1]
+        triangulos.append((a0, b0, a1))
+        triangulos.append((a1, b0, b1))
+    return triangulos
+
+
+def _tapa_abanico(
+    anillo_idx: list[int], vertices: list[tuple[float, float, float]], normal_saliente: np.ndarray,
+) -> list[tuple[int, int, int]]:
+    """Triangulación en abanico de una tapa (anillo de un perfil convexo,
+    sin índice duplicado) — válida sin dependencias extra porque tanto el
+    contorno herradura cerrado con piso plano como el círculo son convexos.
+    Corrige el sentido de cada triángulo contra `normal_saliente`."""
+    v0 = anillo_idx[0]
+    p0 = np.array(vertices[v0])
+    triangulos = []
+    for i in range(1, len(anillo_idx) - 1):
+        v1, v2 = anillo_idx[i], anillo_idx[i + 1]
+        p1, p2 = np.array(vertices[v1]), np.array(vertices[v2])
+        normal = np.cross(p1 - p0, p2 - p0)
+        if np.dot(normal, normal_saliente) < 0:
+            v1, v2 = v2, v1
+        triangulos.append((v0, v1, v2))
+    return triangulos
+
+
+def _malla_solida_generica(
+    perfil: np.ndarray,
+    longitud_existente: float,
+    avance_proyectado: float,
+    n_anillos_existente: int,
+    n_anillos_proyectado: int,
+    colocar_3d,
+) -> dict:
+    """Vértices y triángulos de un sólido CERRADO (piso + muros/arco + 2
+    tapas en los extremos) para el tramo existente y el proyectado, con una
+    etiqueta de tramo por triángulo para poder colorearlos distinto.
+
+    `colocar_3d(perfil_punto, coord_extrusion) -> (x, y, z)` ubica un punto
+    2D del perfil en el eje de extrusión que corresponda (X para galerías,
+    Z para piques/chimeneas), permitiendo compartir toda esta lógica entre
+    ambas orientaciones.
+
+    Devuelve un dict con:
+      - "vertices": array (N, 3) de todos los vértices
+      - "triangulos": array (M, 3) de índices de vértice por triángulo
+      - "tramo_por_triangulo": lista de "existente"/"proyectado" (largo M)
+      - "frontera_local": coordenada de extrusión donde termina lo
+        existente y empieza lo proyectado
+    """
+    n_perfil = len(perfil)
+
+    tramos_coord = []
+    if longitud_existente > 0:
+        tramos_coord.append(("existente", np.linspace(0.0, longitud_existente, max(n_anillos_existente, 2))))
+    coord_proy = np.linspace(
+        longitud_existente, longitud_existente + avance_proyectado, max(n_anillos_proyectado, 2)
+    )
+    if tramos_coord:
+        coord_proy = coord_proy[1:]  # evita duplicar el anillo de empalme
+    tramos_coord.append(("proyectado", coord_proy))
+
+    vertices: list[tuple[float, float, float]] = []
+    anillos_idx: list[list[int]] = []
+    anillo_tramo: list[str] = []
+    for nombre_tramo, coords in tramos_coord:
+        for coord in coords:
+            idx_inicio = len(vertices)
+            vertices.extend(colocar_3d(punto, coord) for punto in perfil)
+            anillos_idx.append(list(range(idx_inicio, idx_inicio + n_perfil)))
+            anillo_tramo.append(nombre_tramo)
+
+    triangulos: list[tuple[int, int, int]] = []
+    tramo_por_triangulo: list[str] = []
+    for r in range(len(anillos_idx) - 1):
+        ring_a, ring_b = anillos_idx[r], anillos_idx[r + 1]
+        # el tramo del segmento es el del anillo de llegada (evita marcar el
+        # anillo de empalme, que pertenece a "existente", como "proyectado")
+        tramo = anillo_tramo[r + 1]
+        franja = _franja_triangulos(ring_a, ring_b, n_perfil)
+        triangulos.extend(franja)
+        tramo_por_triangulo.extend([tramo] * len(franja))
+
+    normal_inicio = np.array(colocar_3d((0.0, 0.0), -1.0)) - np.array(colocar_3d((0.0, 0.0), 0.0))
+    triangulos_tapa_inicio = _tapa_abanico(anillos_idx[0], vertices, normal_inicio)
+    triangulos.extend(triangulos_tapa_inicio)
+    tramo_por_triangulo.extend([anillo_tramo[0]] * len(triangulos_tapa_inicio))
+
+    normal_fin = -normal_inicio
+    triangulos_tapa_fin = _tapa_abanico(anillos_idx[-1], vertices, normal_fin)
+    triangulos.extend(triangulos_tapa_fin)
+    tramo_por_triangulo.extend([anillo_tramo[-1]] * len(triangulos_tapa_fin))
+
+    return {
+        "vertices": np.array(vertices),
+        "triangulos": np.array(triangulos),
+        "tramo_por_triangulo": tramo_por_triangulo,
+        "frontera_local": longitud_existente,
+    }
 
 
 def malla_solida_tunel(
@@ -92,59 +224,55 @@ def malla_solida_tunel(
     n_anillos_proyectado: int = 14,
     n_arco: int = 24,
 ) -> dict:
-    """Vértices y triángulos de una superficie sólida (tubo abierto tipo
-    herradura) para el tramo existente y el proyectado, con una etiqueta de
-    tramo por triángulo para poder colorearlos distinto.
-
-    Devuelve un dict con:
-      - "vertices": array (N, 3) de todos los vértices (x, y, z)
-      - "triangulos": array (M, 3) de índices de vértice por triángulo
-      - "tramo_por_triangulo": lista de "existente"/"proyectado" (largo M)
-      - "x_frontera": x donde termina lo existente y empieza lo proyectado
-    """
+    """Vértices y triángulos de un sólido cerrado tipo herradura (piso +
+    muros/arco + tapas en el portal y en la punta del avance proyectado)
+    para el tramo existente y el proyectado. Ver `_malla_solida_generica`
+    para el formato de retorno."""
     perfil = perfil_herradura(ancho, alto, n_arco=n_arco)
-    n_perfil = len(perfil)
 
-    tramos_xs = []
-    if longitud_existente > 0:
-        tramos_xs.append(("existente", np.linspace(0.0, longitud_existente, max(n_anillos_existente, 2))))
-    xs_proy = np.linspace(
-        longitud_existente, longitud_existente + avance_proyectado, max(n_anillos_proyectado, 2)
+    def colocar_3d(punto: tuple[float, float], x: float) -> tuple[float, float, float]:
+        y, z = punto
+        return (x, y, z)
+
+    return _malla_solida_generica(
+        perfil, longitud_existente, avance_proyectado,
+        n_anillos_existente, n_anillos_proyectado, colocar_3d,
     )
-    if tramos_xs:
-        xs_proy = xs_proy[1:]  # evita duplicar el anillo de empalme
-    tramos_xs.append(("proyectado", xs_proy))
 
-    vertices: list[tuple[float, float, float]] = []
-    anillos_idx: list[list[int]] = []
-    anillo_tramo: list[str] = []
-    for nombre_tramo, xs in tramos_xs:
-        for x in xs:
-            idx_inicio = len(vertices)
-            vertices.extend((x, y, z) for y, z in perfil)
-            anillos_idx.append(list(range(idx_inicio, idx_inicio + n_perfil)))
-            anillo_tramo.append(nombre_tramo)
 
-    triangulos: list[tuple[int, int, int]] = []
-    tramo_por_triangulo: list[str] = []
-    for r in range(len(anillos_idx) - 1):
-        ring_a, ring_b = anillos_idx[r], anillos_idx[r + 1]
-        # el tramo del segmento es el del anillo de llegada (evita marcar el
-        # anillo de empalme, que pertenece a "existente", como "proyectado")
-        tramo = anillo_tramo[r + 1]
-        for j in range(n_perfil - 1):
-            a0, a1 = ring_a[j], ring_a[j + 1]
-            b0, b1 = ring_b[j], ring_b[j + 1]
-            triangulos.append((a0, a1, b0))
-            triangulos.append((a1, b1, b0))
-            tramo_por_triangulo.extend([tramo, tramo])
+def perfil_circular(diametro: float, n_arco: int = 24) -> np.ndarray:
+    """Contorno 2D (x, y) de una sección circular, `n_arco` puntos
+    equiespaciados sin punto de cierre duplicado (misma convención que
+    `perfil_herradura`: cerrar el anillo es responsabilidad de la malla)."""
+    radio = diametro / 2.0
+    angulos = np.linspace(0.0, 2 * np.pi, n_arco, endpoint=False)
+    return np.column_stack([radio * np.cos(angulos), radio * np.sin(angulos)])
 
-    return {
-        "vertices": np.array(vertices),
-        "triangulos": np.array(triangulos),
-        "tramo_por_triangulo": tramo_por_triangulo,
-        "x_frontera": longitud_existente,
-    }
+
+def malla_solida_pique(
+    diametro: float,
+    longitud_existente: float,
+    avance_proyectado: float,
+    n_anillos_existente: int = 4,
+    n_anillos_proyectado: int = 6,
+    n_arco: int = 24,
+) -> dict:
+    """Análogo cilíndrico de `malla_solida_tunel` para Pique/Chimenea:
+    sección circular (`perfil_circular`) extruida a lo largo del eje LOCAL
+    +Z (no +X) — un pique/chimenea es una labor vertical/subvertical.
+    `diametro` reutiliza `labor.ancho_m`; `alto_m` no se usa para estos
+    tipos. Mismo formato de retorno que `malla_solida_tunel` (incluye
+    "frontera_local", aquí la coordenada Z donde termina lo existente)."""
+    perfil = perfil_circular(diametro, n_arco=n_arco)
+
+    def colocar_3d(punto: tuple[float, float], z: float) -> tuple[float, float, float]:
+        x, y = punto
+        return (x, y, z)
+
+    return _malla_solida_generica(
+        perfil, longitud_existente, avance_proyectado,
+        n_anillos_existente, n_anillos_proyectado, colocar_3d,
+    )
 
 
 def relacion_aspecto(ancho: float, alto: float, longitud: float) -> tuple[float, float, float]:

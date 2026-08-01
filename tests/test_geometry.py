@@ -1,7 +1,34 @@
+from collections import Counter
+
 import numpy as np
 import pytest
 
-from core.geometry import malla_solida_tunel, malla_tunel, perfil_herradura, relacion_aspecto
+from core.geometry import (
+    malla_solida_pique,
+    malla_solida_tunel,
+    malla_tunel,
+    perfil_circular,
+    perfil_herradura,
+    relacion_aspecto,
+)
+
+
+def _es_hermetico(triangulos: np.ndarray) -> bool:
+    """Un sólido cerrado (todas las tapas incluidas) tiene cada arista
+    compartida por exactamente 2 triángulos."""
+    conteo = Counter()
+    for a, b, c in triangulos:
+        for u, v in ((a, b), (b, c), (c, a)):
+            conteo[frozenset((u, v))] += 1
+    return set(conteo.values()) == {2}
+
+
+def _euler(vertices: np.ndarray, triangulos: np.ndarray) -> int:
+    aristas = set()
+    for a, b, c in triangulos:
+        for u, v in ((a, b), (b, c), (c, a)):
+            aristas.add(frozenset((u, v)))
+    return len(vertices) - len(aristas) + len(triangulos)
 
 
 def test_perfil_herradura_dimensiones():
@@ -54,7 +81,7 @@ def test_malla_solida_tunel_sin_tramo_existente():
     )
     assert set(malla["tramo_por_triangulo"]) == {"proyectado"}
     assert malla["triangulos"].max() < len(malla["vertices"])
-    assert malla["x_frontera"] == 0.0
+    assert malla["frontera_local"] == 0.0
 
 
 def test_malla_solida_tunel_con_ambos_tramos():
@@ -64,7 +91,7 @@ def test_malla_solida_tunel_con_ambos_tramos():
     )
     tramos = set(malla["tramo_por_triangulo"])
     assert tramos == {"existente", "proyectado"}
-    assert malla["x_frontera"] == pytest.approx(9.0)
+    assert malla["frontera_local"] == pytest.approx(9.0)
     # todos los índices de triángulo deben apuntar a vértices válidos
     assert malla["triangulos"].max() < len(malla["vertices"])
     # los vértices del tramo existente no deben pasar de x=9.0
@@ -76,6 +103,51 @@ def test_malla_solida_tunel_con_ambos_tramos():
             assert xs_tri.max() <= 9.0 + 1e-9
         else:
             assert xs_tri.min() >= 9.0 - 1e-9
+
+
+def test_malla_solida_tunel_es_hermetica():
+    # 1 solo tramo (sin existente) y 2 tramos deben quedar completamente
+    # cerrados: cada arista compartida por exactamente 2 triángulos, y
+    # característica de Euler V-E+F=2 (superficie cerrada, topología esfera).
+    for kwargs in (
+        dict(longitud_existente=0.0, avance_proyectado=66.0, n_anillos_proyectado=6),
+        dict(longitud_existente=9.0, avance_proyectado=66.0, n_anillos_existente=4, n_anillos_proyectado=6),
+    ):
+        malla = malla_solida_tunel(ancho=1.77, alto=1.10, **kwargs)
+        assert _es_hermetico(malla["triangulos"])
+        assert _euler(malla["vertices"], malla["triangulos"]) == 2
+
+
+def test_perfil_circular_dimensiones():
+    perfil = perfil_circular(diametro=3.0, n_arco=24)
+    assert len(perfil) == 24
+    radios = np.hypot(perfil[:, 0], perfil[:, 1])
+    assert radios == pytest.approx(1.5, abs=1e-9)
+
+
+def test_malla_solida_pique_extruye_en_z():
+    malla = malla_solida_pique(
+        diametro=3.0, longitud_existente=15.0, avance_proyectado=40.0,
+        n_anillos_existente=3, n_anillos_proyectado=5,
+    )
+    vertices = malla["vertices"]
+    # el eje de extrusión es Z (no X): el rango de x/y es solo el radio,
+    # el rango de z cubre toda la profundidad/altura de la labor.
+    assert vertices[:, 0].max() - vertices[:, 0].min() == pytest.approx(3.0)
+    assert vertices[:, 1].max() - vertices[:, 1].min() == pytest.approx(3.0)
+    assert vertices[:, 2].min() == pytest.approx(0.0)
+    assert vertices[:, 2].max() == pytest.approx(55.0)
+    assert malla["frontera_local"] == pytest.approx(15.0)
+
+
+def test_malla_solida_pique_es_hermetica():
+    for kwargs in (
+        dict(longitud_existente=0.0, avance_proyectado=40.0, n_anillos_proyectado=5),
+        dict(longitud_existente=15.0, avance_proyectado=40.0, n_anillos_existente=3, n_anillos_proyectado=5),
+    ):
+        malla = malla_solida_pique(diametro=3.0, **kwargs)
+        assert _es_hermetico(malla["triangulos"])
+        assert _euler(malla["vertices"], malla["triangulos"]) == 2
 
 
 def test_relacion_aspecto_preserva_escala_ancho_alto():

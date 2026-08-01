@@ -1,3 +1,4 @@
+import math
 from pathlib import Path
 
 import pandas as pd
@@ -10,15 +11,24 @@ LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_meecsac.jp
 from core.constants import (
     DESTINOS_MATERIAL,
     EQUIPOS_PERFORACION,
+    LABORES_VERTICALES,
     TIPOS_CORTE,
     TIPOS_EXPLOSIVO_DEFAULT,
     TIPOS_LABOR,
     TIPOS_ROCA,
 )
+from core.geometry import malla_solida_pique, malla_solida_tunel
+from core.georef import (
+    calcular_rumbo_pendiente,
+    matriz_rotacion,
+    matriz_rotacion_vertical,
+    transformar_vertices,
+)
 from core.memoria import memoria_calculo
 from core.models import DatosGenerales, LaborMinera
 from core.voladura import calcular_programa
 from reports.docx_builder import build_voladura_report
+from reports.dxf_export import construir_dxf_labor
 from viz.tunnel_plot import build_tunnel_figure, build_tunnel_figure_solido
 
 st.set_page_config(page_title="Voladura", page_icon=str(LOGO_PATH), layout="wide")
@@ -182,6 +192,145 @@ st.caption(
     "línea punteada = frente actual."
 )
 
+st.subheader(":material/place: Georreferenciación y exportación DXF")
+st.caption(
+    "Ubica el punto de inicio real (UTM + cota) de esta labor para exportar "
+    "el sólido a DXF y colocarlo en su posición exacta dentro de un modelo "
+    "de AutoCAD que ya esté georreferenciado en UTM."
+)
+labor_actual = labores[idx_esquema]
+es_vertical = labor_actual.tipo in LABORES_VERTICALES
+clave_labor = labor_actual.nombre
+
+c_este, c_norte, c_cota = st.columns(3)
+with c_este:
+    labor_actual.este_utm_inicio = st.number_input(
+        "Este UTM — punto de inicio", value=labor_actual.este_utm_inicio,
+        format="%.2f", key=f"geo_este_inicio_{clave_labor}",
+    )
+with c_norte:
+    labor_actual.norte_utm_inicio = st.number_input(
+        "Norte UTM — punto de inicio", value=labor_actual.norte_utm_inicio,
+        format="%.2f", key=f"geo_norte_inicio_{clave_labor}",
+    )
+with c_cota:
+    labor_actual.cota_inicio_m = st.number_input(
+        "Cota — punto de inicio (m)", value=labor_actual.cota_inicio_m,
+        format="%.2f", key=f"geo_cota_inicio_{clave_labor}",
+    )
+
+tiene_punto_final = st.checkbox(
+    "La labor ya está en operación (tengo el punto final real)",
+    value=labor_actual.este_utm_final is not None,
+    key=f"geo_tiene_final_{clave_labor}",
+)
+
+if tiene_punto_final:
+    c_este_f, c_norte_f, c_cota_f = st.columns(3)
+    with c_este_f:
+        labor_actual.este_utm_final = st.number_input(
+            "Este UTM — punto final", value=labor_actual.este_utm_final,
+            format="%.2f", key=f"geo_este_final_{clave_labor}",
+        )
+    with c_norte_f:
+        labor_actual.norte_utm_final = st.number_input(
+            "Norte UTM — punto final", value=labor_actual.norte_utm_final,
+            format="%.2f", key=f"geo_norte_final_{clave_labor}",
+        )
+    with c_cota_f:
+        labor_actual.cota_final_m = st.number_input(
+            "Cota — punto final (m)", value=labor_actual.cota_final_m,
+            format="%.2f", key=f"geo_cota_final_{clave_labor}",
+        )
+elif es_vertical:
+    labor_actual.este_utm_final = labor_actual.norte_utm_final = labor_actual.cota_final_m = None
+    labor_actual.sentido_vertical = st.radio(
+        "Sentido", ["Abajo", "Arriba"], horizontal=True, key=f"geo_sentido_{clave_labor}",
+        index=0 if labor_actual.sentido_vertical == "Abajo" else 1,
+    )
+else:
+    labor_actual.este_utm_final = labor_actual.norte_utm_final = labor_actual.cota_final_m = None
+    c_rumbo, c_pendiente = st.columns(2)
+    with c_rumbo:
+        labor_actual.rumbo_manual_deg = st.number_input(
+            "Rumbo manual (° desde el Norte)", value=labor_actual.rumbo_manual_deg,
+            min_value=0.0, max_value=360.0, format="%.1f", key=f"geo_rumbo_{clave_labor}",
+        )
+    with c_pendiente:
+        labor_actual.pendiente_manual_pct = st.number_input(
+            "Pendiente manual (%, opcional — positivo = bajando)",
+            value=labor_actual.pendiente_manual_pct, format="%.1f", key=f"geo_pendiente_{clave_labor}",
+        )
+
+punto_inicio_completo = None not in (
+    labor_actual.este_utm_inicio, labor_actual.norte_utm_inicio, labor_actual.cota_inicio_m,
+)
+punto_final_completo = None not in (
+    labor_actual.este_utm_final, labor_actual.norte_utm_final, labor_actual.cota_final_m,
+)
+
+st.markdown("**Exportar a AutoCAD (DXF)**")
+if not punto_inicio_completo:
+    st.info("Completa el punto de inicio (Este, Norte, Cota) para poder exportar el sólido a DXF.")
+else:
+    origen = (labor_actual.este_utm_inicio, labor_actual.norte_utm_inicio, labor_actual.cota_inicio_m)
+    longitud_existente_dxf = max(labor_actual.longitud_existente_m, 0.0)
+    avance_proyectado_dxf = max(labor_actual.avance_proyectado_m, 0.01)
+    rotacion = None
+
+    if es_vertical:
+        if punto_final_completo:
+            sentido = "abajo" if labor_actual.cota_final_m < labor_actual.cota_inicio_m else "arriba"
+        else:
+            sentido = "abajo" if labor_actual.sentido_vertical == "Abajo" else "arriba"
+        rotacion = matriz_rotacion_vertical(sentido)
+        malla_dxf = malla_solida_pique(labor_actual.ancho_m, longitud_existente_dxf, avance_proyectado_dxf)
+        st.caption(f"Orientación: labor vertical, sentido \"{sentido}\".")
+    else:
+        rumbo = pendiente_deg = None
+        if punto_final_completo:
+            rumbo, pendiente_deg, distancia_horizontal = calcular_rumbo_pendiente(
+                labor_actual.este_utm_inicio, labor_actual.norte_utm_inicio, labor_actual.cota_inicio_m,
+                labor_actual.este_utm_final, labor_actual.norte_utm_final, labor_actual.cota_final_m,
+            )
+            if longitud_existente_dxf > 0:
+                diferencia = abs(distancia_horizontal - longitud_existente_dxf)
+                if diferencia > max(1.0, 0.05 * longitud_existente_dxf):
+                    st.warning(
+                        f"La distancia real entre los dos puntos ({distancia_horizontal:.1f} m) difiere "
+                        f"de la longitud existente declarada ({longitud_existente_dxf:.1f} m); se usa esta "
+                        "última para el tamaño del sólido exportado."
+                    )
+        elif labor_actual.rumbo_manual_deg is not None:
+            rumbo = labor_actual.rumbo_manual_deg
+            pendiente_deg = math.degrees(math.atan((labor_actual.pendiente_manual_pct or 0.0) / 100.0))
+
+        if rumbo is None:
+            st.info("Ingresa el rumbo manual o el punto final para orientar la exportación.")
+        else:
+            rotacion = matriz_rotacion(rumbo, pendiente_deg)
+            st.caption(f"Rumbo: {rumbo:.1f}° · Pendiente: {pendiente_deg:.1f}°")
+        malla_dxf = malla_solida_tunel(
+            labor_actual.ancho_m, labor_actual.alto_m, longitud_existente_dxf, avance_proyectado_dxf,
+        )
+
+    if rotacion is not None:
+        dg_geo = st.session_state.setdefault("datos_generales", DatosGenerales())
+        vertices_mundo = transformar_vertices(malla_dxf["vertices"], origen, rotacion)
+        dxf_bytes = construir_dxf_labor(
+            vertices_mundo, malla_dxf["triangulos"], malla_dxf["tramo_por_triangulo"],
+            origen, labor_actual.nombre, labor_actual.tipo,
+            zona_hemisferio=f"{dg_geo.zona_utm}{dg_geo.hemisferio}",
+        )
+        st.download_button(
+            "Descargar sólido en DXF (AutoCAD)",
+            data=dxf_bytes,
+            file_name=f"{labor_actual.nombre}.dxf",
+            mime="application/dxf",
+            icon=":material/download:",
+            key=f"descargar_dxf_{clave_labor}",
+        )
+
 st.header(":material/calculate: Memoria de cálculo", divider="gray")
 st.caption(
     "Desglose paso a paso (fórmula → sustitución → resultado) de cada cifra "
@@ -268,6 +417,12 @@ with st.expander("Datos generales del informe (opcional)", icon=":material/badge
         dg.provincia = st.text_input("Provincia", value=dg.provincia)
         dg.distrito = st.text_input("Distrito", value=dg.distrito)
         dg.periodo_meses = st.number_input("Periodo del programa (meses)", min_value=1, value=dg.periodo_meses, step=1)
+    st.caption("Zona UTM del proyecto — se usa como referencia en la exportación a DXF.")
+    c3, c4 = st.columns(2)
+    with c3:
+        dg.zona_utm = st.number_input("Zona UTM", min_value=1, max_value=60, value=dg.zona_utm)
+    with c4:
+        dg.hemisferio = st.selectbox("Hemisferio", ["S", "N"], index=0 if dg.hemisferio == "S" else 1)
 
 estilo_reporte = "solido" if estilo_esquema == "Sólido" else "wireframe"
 buffer = build_voladura_report(

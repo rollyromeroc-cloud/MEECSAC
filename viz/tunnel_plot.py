@@ -15,7 +15,14 @@ from __future__ import annotations
 import numpy as np
 import plotly.graph_objects as go
 
-from core.geometry import malla_solida_tunel, malla_tunel, relacion_aspecto
+from core.constants import LABORES_VERTICALES
+from core.geometry import (
+    malla_solida_pique,
+    malla_solida_tunel,
+    malla_tunel,
+    malla_tunel_pique,
+    relacion_aspecto,
+)
 from core.models import LaborMinera, ResultadoVoladura
 
 # Paleta fija (no se cicla): gris neutro para lo ya construido (un hecho,
@@ -79,6 +86,30 @@ def _agregar_tramo_wireframe(
     )
 
 
+def _agregar_tramo_wireframe_pique(
+    fig: go.Figure, diametro: float, longitud: float, z_inicio: float,
+    color: str, nombre_leyenda: str, n_anillos: int,
+) -> None:
+    if longitud <= 0:
+        return
+    malla = malla_tunel_pique(diametro, longitud, n_anillos=max(n_anillos, 2), z_inicio=z_inicio)
+    xs, ys, zs = _linea_con_separadores(malla["anillos"])
+    fig.add_trace(
+        go.Scatter3d(
+            x=xs, y=ys, z=zs, mode="lines",
+            line=dict(color=color, width=2), name=nombre_leyenda, hoverinfo="skip",
+        )
+    )
+    xs, ys, zs = _linea_con_separadores(malla["longitudinales"])
+    fig.add_trace(
+        go.Scatter3d(
+            x=xs, y=ys, z=zs, mode="lines",
+            line=dict(color=color, width=4), name=nombre_leyenda,
+            showlegend=False, hoverinfo="skip",
+        )
+    )
+
+
 def _cotas_comunes(
     labor: LaborMinera, longitud_total: float
 ) -> tuple[list[np.ndarray], list[float], list[float], list[float], list[str]]:
@@ -123,6 +154,71 @@ def _cotas_comunes(
     return lineas, tx, ty, tz, textos
 
 
+def _cotas_verticales(
+    labor: LaborMinera, longitud_total: float
+) -> tuple[list[np.ndarray], list[float], list[float], list[float], list[str]]:
+    """Cotas de diámetro, profundidad/altura existente y avance proyectado
+    para Pique/Chimenea (extrusión local a lo largo de Z)."""
+    radio = labor.ancho_m / 2.0
+    longitud_existente = max(labor.longitud_existente_m, 0.0)
+    avance_proyectado = labor.avance_proyectado_m
+
+    offset_vertical = max(0.5, 0.08 * longitud_total)
+    offset_lateral = max(0.3, 0.3 * radio)
+    tick = max(offset_vertical, offset_lateral) * 0.4
+    z0 = -offset_vertical
+
+    lineas: list[np.ndarray] = []
+    tx, ty, tz, textos = [], [], [], []
+
+    _agregar_cota(lineas, (-radio, 0.0, z0), (radio, 0.0, z0), (0, 1, 0), tick)
+    tx.append(0.0); ty.append(0.0); tz.append(z0 - offset_vertical * 0.5)
+    textos.append(f"Diámetro: {labor.ancho_m:.2f} m")
+
+    if longitud_existente > 0:
+        x_prof = radio + offset_lateral * 1.8
+        _agregar_cota(lineas, (x_prof, 0.0, 0.0), (x_prof, 0.0, longitud_existente), (1, 0, 0), tick)
+        tx.append(x_prof + offset_lateral * 0.8); ty.append(0.0); tz.append(longitud_existente / 2.0)
+        textos.append(f"Profundidad/altura existente: {longitud_existente:.2f} m")
+
+    x_avance = -(radio + offset_lateral * 1.8)
+    _agregar_cota(
+        lineas, (x_avance, 0.0, longitud_existente), (x_avance, 0.0, longitud_total), (1, 0, 0), tick
+    )
+    tx.append(x_avance - offset_lateral * 0.8); ty.append(0.0)
+    tz.append(longitud_existente + avance_proyectado / 2.0)
+    textos.append(f"Avance proyectado: {avance_proyectado:.2f} m")
+
+    return lineas, tx, ty, tz, textos
+
+
+def _layout_vertical(fig: go.Figure, labor: LaborMinera, longitud_total: float) -> None:
+    ratio_largo, ratio_diametro, _ = relacion_aspecto(labor.ancho_m, labor.ancho_m, longitud_total)
+    fig.update_layout(
+        title=f"Esquema — {labor.tipo}: {labor.nombre}",
+        scene=dict(
+            xaxis=dict(title="", showbackground=False, visible=False),
+            yaxis=dict(title="", showbackground=False, visible=False),
+            zaxis=dict(title="Profundidad / altura (m)", showbackground=False),
+            aspectmode="manual",
+            aspectratio=dict(x=ratio_diametro, y=ratio_diametro, z=ratio_largo),
+            camera=dict(eye=dict(x=0.9, y=0.9, z=0.35)),
+        ),
+        legend=dict(orientation="h", yanchor="bottom", y=0.01, x=0.01),
+        margin=dict(l=0, r=0, t=40, b=30),
+        annotations=[
+            dict(
+                text=(
+                    f"Diámetro {labor.ancho_m:.2f} m — "
+                    f"esquema referencial, proporciones no a escala"
+                ),
+                xref="paper", yref="paper", x=0.5, y=-0.02,
+                showarrow=False, font=dict(color=COLOR_COTA, size=10),
+            )
+        ],
+    )
+
+
 def _layout_comun(fig: go.Figure, labor: LaborMinera, longitud_total: float) -> None:
     ratio_x, ratio_y, ratio_z = relacion_aspecto(labor.ancho_m, labor.alto_m, longitud_total)
     fig.update_layout(
@@ -156,7 +252,10 @@ def build_tunnel_figure(
     n_anillos: int = 16,
 ) -> go.Figure:
     """Wireframe 3D de la labor: tramo existente (gris) + tramo proyectado
-    (color de identidad), con sus cotas."""
+    (color de identidad), con sus cotas. Pique/Chimenea se dibujan como
+    cilindro vertical (extrusión local en Z); el resto, como herradura
+    horizontal (extrusión local en X)."""
+    vertical = labor.tipo in LABORES_VERTICALES
     longitud_existente = max(labor.longitud_existente_m, 0.0)
     avance_proyectado = max(labor.avance_proyectado_m, 0.01)
     longitud_total = longitud_existente + avance_proyectado
@@ -168,22 +267,38 @@ def build_tunnel_figure(
     )
     n_anillos_proyectado = max(3, n_anillos - n_anillos_existente)
 
-    _agregar_tramo_wireframe(
-        fig, labor.ancho_m, labor.alto_m, longitud_existente, 0.0,
-        COLOR_EXISTENTE, "Tramo existente", n_anillos_existente,
-    )
-    _agregar_tramo_wireframe(
-        fig, labor.ancho_m, labor.alto_m, avance_proyectado, longitud_existente,
-        COLOR_PROYECTADO, "Tramo proyectado", n_anillos_proyectado,
-    )
+    if vertical:
+        _agregar_tramo_wireframe_pique(
+            fig, labor.ancho_m, longitud_existente, 0.0,
+            COLOR_EXISTENTE, "Tramo existente", n_anillos_existente,
+        )
+        _agregar_tramo_wireframe_pique(
+            fig, labor.ancho_m, avance_proyectado, longitud_existente,
+            COLOR_PROYECTADO, "Tramo proyectado", n_anillos_proyectado,
+        )
+    else:
+        _agregar_tramo_wireframe(
+            fig, labor.ancho_m, labor.alto_m, longitud_existente, 0.0,
+            COLOR_EXISTENTE, "Tramo existente", n_anillos_existente,
+        )
+        _agregar_tramo_wireframe(
+            fig, labor.ancho_m, labor.alto_m, avance_proyectado, longitud_existente,
+            COLOR_PROYECTADO, "Tramo proyectado", n_anillos_proyectado,
+        )
 
     if longitud_existente > 0:
         radio = labor.ancho_m / 2.0
+        if vertical:
+            frente = dict(
+                x=[-radio, radio], y=[0.0, 0.0], z=[longitud_existente, longitud_existente],
+            )
+        else:
+            frente = dict(
+                x=[longitud_existente, longitud_existente], y=[0.0, 0.0], z=[0.0, labor.alto_m],
+            )
         fig.add_trace(
             go.Scatter3d(
-                x=[longitud_existente, longitud_existente],
-                y=[0.0, 0.0],
-                z=[0.0, labor.alto_m],
+                **frente,
                 mode="lines",
                 line=dict(color=COLOR_FRONTERA, width=3, dash="dash"),
                 name="Frente actual",
@@ -191,7 +306,8 @@ def build_tunnel_figure(
             )
         )
 
-    cota_lineas, tx, ty, tz, textos = _cotas_comunes(labor, longitud_total)
+    cotas = _cotas_verticales if vertical else _cotas_comunes
+    cota_lineas, tx, ty, tz, textos = cotas(labor, longitud_total)
     xs, ys, zs = _linea_con_separadores(cota_lineas)
     fig.add_trace(
         go.Scatter3d(
@@ -207,7 +323,7 @@ def build_tunnel_figure(
         )
     )
 
-    _layout_comun(fig, labor, longitud_total)
+    (_layout_vertical if vertical else _layout_comun)(fig, labor, longitud_total)
     return fig
 
 
@@ -216,8 +332,10 @@ def build_tunnel_figure_solido(
     resultado: ResultadoVoladura,
     n_anillos: int = 16,
 ) -> go.Figure:
-    """Versión sólida (superficie rellena) del mismo esquema, con el mismo
-    esquema de colores existente/proyectado."""
+    """Versión sólida y cerrada (piso/muros/arco + tapas, o cilindro para
+    Pique/Chimenea) del mismo esquema, con el mismo esquema de colores
+    existente/proyectado."""
+    vertical = labor.tipo in LABORES_VERTICALES
     longitud_existente = max(labor.longitud_existente_m, 0.0)
     avance_proyectado = max(labor.avance_proyectado_m, 0.01)
     longitud_total = longitud_existente + avance_proyectado
@@ -227,11 +345,18 @@ def build_tunnel_figure_solido(
     )
     n_anillos_proyectado = max(3, n_anillos - n_anillos_existente)
 
-    malla = malla_solida_tunel(
-        labor.ancho_m, labor.alto_m, longitud_existente, avance_proyectado,
-        n_anillos_existente=max(n_anillos_existente, 2) if longitud_existente > 0 else 0,
-        n_anillos_proyectado=n_anillos_proyectado,
-    )
+    if vertical:
+        malla = malla_solida_pique(
+            labor.ancho_m, longitud_existente, avance_proyectado,
+            n_anillos_existente=max(n_anillos_existente, 2) if longitud_existente > 0 else 0,
+            n_anillos_proyectado=n_anillos_proyectado,
+        )
+    else:
+        malla = malla_solida_tunel(
+            labor.ancho_m, labor.alto_m, longitud_existente, avance_proyectado,
+            n_anillos_existente=max(n_anillos_existente, 2) if longitud_existente > 0 else 0,
+            n_anillos_proyectado=n_anillos_proyectado,
+        )
     vertices = malla["vertices"]
     triangulos = malla["triangulos"]
     color_por_triangulo = [
@@ -266,11 +391,18 @@ def build_tunnel_figure_solido(
             )
 
     if longitud_existente > 0:
+        radio = labor.ancho_m / 2.0
+        if vertical:
+            frente = dict(
+                x=[-radio, radio], y=[0.0, 0.0], z=[longitud_existente, longitud_existente],
+            )
+        else:
+            frente = dict(
+                x=[longitud_existente, longitud_existente], y=[0.0, 0.0], z=[0.0, labor.alto_m],
+            )
         fig.add_trace(
             go.Scatter3d(
-                x=[longitud_existente, longitud_existente],
-                y=[0.0, 0.0],
-                z=[0.0, labor.alto_m],
+                **frente,
                 mode="lines",
                 line=dict(color=COLOR_FRONTERA, width=4, dash="dash"),
                 name="Frente actual",
@@ -278,7 +410,8 @@ def build_tunnel_figure_solido(
             )
         )
 
-    cota_lineas, tx, ty, tz, textos = _cotas_comunes(labor, longitud_total)
+    cotas = _cotas_verticales if vertical else _cotas_comunes
+    cota_lineas, tx, ty, tz, textos = cotas(labor, longitud_total)
     xs, ys, zs = _linea_con_separadores(cota_lineas)
     fig.add_trace(
         go.Scatter3d(
@@ -294,5 +427,5 @@ def build_tunnel_figure_solido(
         )
     )
 
-    _layout_comun(fig, labor, longitud_total)
+    (_layout_vertical if vertical else _layout_comun)(fig, labor, longitud_total)
     return fig

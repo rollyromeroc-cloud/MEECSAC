@@ -10,10 +10,12 @@ from core.constants import (
     DENSIDAD_MINERAL_DEFAULT,
     DIAMETRO_BARRENO_DEFAULT_MM,
     DISTRIBUCION_EXPLOSIVO_DEFAULT,
+    HEMISFERIO_DEFAULT,
     LONGITUD_BARRENO_DEFAULT_PIES,
     PESO_CARTUCHO_DEFAULT_KG,
     TIPOS_EXPLOSIVO_DEFAULT,
     TRAMO_ENCENDIDO_MECHA_PIES,
+    ZONA_UTM_DEFAULT,
 )
 
 
@@ -60,9 +62,19 @@ class LaborMinera:
     tipo_fulminante: str = "Fulminante común N.° 08"
     tramo_encendido_pies: float = TRAMO_ENCENDIDO_MECHA_PIES
 
-    # Ubicación opcional (para el mapa del programa general)
-    este_utm: Optional[float] = None
-    norte_utm: Optional[float] = None
+    # Georreferenciación opcional (para exportar el sólido a DXF/AutoCAD en
+    # su posición real). Punto de inicio; punto final solo si la labor ya
+    # está en operación (se usa para calcular rumbo/pendiente reales en vez
+    # de los manuales). Ver core.georef.
+    este_utm_inicio: Optional[float] = None
+    norte_utm_inicio: Optional[float] = None
+    cota_inicio_m: Optional[float] = None
+    este_utm_final: Optional[float] = None
+    norte_utm_final: Optional[float] = None
+    cota_final_m: Optional[float] = None
+    rumbo_manual_deg: Optional[float] = None
+    pendiente_manual_pct: Optional[float] = None
+    sentido_vertical: str = "Abajo"  # solo Pique/Chimenea sin punto final: "Abajo" o "Arriba"
 
     observaciones: str = ""
 
@@ -153,6 +165,11 @@ class DatosGenerales:
     provincia: str = ""
     distrito: str = ""
     periodo_meses: int = 6
+
+    # Zona UTM del proyecto — metadato para la etiqueta del marcador DXF
+    # (la exportación en sí usa Este/Norte/Cota crudos, sin reproyectar).
+    zona_utm: int = ZONA_UTM_DEFAULT
+    hemisferio: str = HEMISFERIO_DEFAULT
 
 
 @dataclass
