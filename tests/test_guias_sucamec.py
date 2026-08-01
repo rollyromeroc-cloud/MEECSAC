@@ -20,6 +20,8 @@ POLVORIN_PRUEBA = PolvorinGuiaSucamec(
     concesion_distrito="DISTRITO CONCESION",
     concesion_provincia="PROVINCIA CONCESION",
     concesion_departamento="DEPARTAMENTO CONCESION",
+    resolucion_gerencia_numero="01463-2026-SUCAMEC/DEPP-SDAEPP",
+    resolucion_gerencia_fecha="12/05/2026",
 )
 
 
@@ -94,6 +96,36 @@ def test_generar_zip_guias_dos_variantes_no_se_combinan():
         assert "CONCESION DE PRUEBA" in ws2["E51"].value
         assert "99999999X01" in ws2["E51"].value
         assert ws2["E55"].value == POLVORIN_PRUEBA.concesion_distrito
+        # La resolucion de gerencia de la solicitud (bloque destino) tambien
+        # se completa; la de subdireccion del polvorin (bloque origen) no.
+        assert ws2["S59"].value == "N° 01463-2026-SUCAMEC/DEPP-SDAEPP"
+        assert (ws2["AE59"].value, ws2["AH59"].value, ws2["AK59"].value) == (12, 5, 2026)
+        resolucion_origen_original = _valor_original(PLANTILLA_GUIA_TIPO2, "S48")
+        assert ws2["S48"].value == resolucion_origen_original
+
+
+def test_resolucion_gerencia_vacia_no_sobreescribe_bloque_destino():
+    # Si la solicitud no trae resolucion de gerencia, el bloque destino
+    # (limpiado en la plantilla) se queda vacio en vez de heredar algo.
+    polvorin_sin_resolucion = PolvorinGuiaSucamec(
+        nombre="Solicitud sin resolución",
+        concesion_nombre="OTRA CONCESION",
+        concesion_codigo="11111111X01",
+    )
+    producto = ProductoGuia(
+        nombre_variante="Dinamita sin resolución",
+        categoria="Explosivos",
+        producto_sucamec="Dinamita",
+        cantidad_solicitada=575,
+        capacidad_por_guia=575,
+        unidad_abrev="KG",
+        polvorin=polvorin_sin_resolucion,
+    )
+    zip_buffer, _ = generar_zip_guias([producto])
+    with ZipFile(BytesIO(zip_buffer.getvalue())) as zf:
+        nombre_tipo2 = next(n for n in zf.namelist() if n.startswith("TIPO2_"))
+        wb = openpyxl.load_workbook(BytesIO(zf.read(nombre_tipo2)))
+        assert wb.active["S59"].value is None
 
 
 def test_generar_zip_guias_categoria_accesorios_usa_plantilla_correcta():

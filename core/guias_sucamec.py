@@ -3,13 +3,15 @@ tipo 2 (Polvorin -> Unidad minera), a partir del calculo de guias por
 producto (core.polvorin.calcular_guias) y de los datos de la concesion
 asignados.
 
-Las plantillas (bundled en assets/plantillas_sucamec/, o subidas por el
-usuario por polvorin) son los modelos reales ya llenados: se abren tal cual y
+Las plantillas (bundled en assets/plantillas_sucamec/ con los datos reales
+del polvorin FAMESA-Huaral, o subidas por el usuario si la solicitud usa un
+polvorin distinto) son los modelos reales ya llenados: se abren tal cual y
 solo se sobreescriben las celdas de producto/cantidad/unidades, la firma (si
-se sube una imagen) y, en tipo 2, la concesion/unidad minera de destino. La
-resolucion, direccion y demas datos propios del polvorin (destino en tipo 1,
-origen en tipo 2) NO se tocan: se mantienen exactamente como estan en el
-Excel base de ese polvorin.
+se sube una imagen) y, en tipo 2, la concesion/unidad minera de destino mas
+su resolucion de gerencia (autorizacion excepcional de uso). La resolucion
+de subdireccion, direccion y demas datos propios del polvorin (destino en
+tipo 1, origen en tipo 2) NO se tocan: se mantienen exactamente como estan
+en el Excel base de esa solicitud.
 """
 
 from __future__ import annotations
@@ -96,6 +98,30 @@ def _rellenar_destino_concesion_tipo2(ws, polvorin: PolvorinGuiaSucamec) -> None
         ws["AE55"] = polvorin.concesion_departamento
 
 
+def _rellenar_resolucion_gerencia_tipo2(ws, polvorin: PolvorinGuiaSucamec) -> None:
+    """Bloque de resolución de la concesión destino (filas 57-59 del Excel
+    TIPO 2): la "AUTORIZACIÓN EXCEPCIONAL DE USO DE EXPLOSIVOS A MINEROS EN
+    PROCESO DE FORMALIZACIÓN" de gerencia relacionada con la solicitud — es
+    distinta de la resolución de subdirección del polvorín (esa sí se deja
+    intacta, la trae la plantilla)."""
+    numero = polvorin.resolucion_gerencia_numero.strip()
+    if numero:
+        if not numero.upper().startswith("N"):
+            numero = f"N° {numero}"
+        ws["S59"] = numero
+    fecha = polvorin.resolucion_gerencia_fecha.strip()
+    if fecha:
+        partes = fecha.split("/")
+        if len(partes) == 3:
+            try:
+                dia, mes, anio = (int(parte) for parte in partes)
+            except ValueError:
+                return
+            ws["AE59"] = dia
+            ws["AH59"] = mes
+            ws["AK59"] = anio
+
+
 def _preparar_imagen_firma(firma_bytes: bytes, ancho_max_px: int, alto_max_px: int) -> BytesIO:
     """Reescala la firma para que quepa en el recuadro (mismo tamaño que la
     firma original del modelo) sin deformarla."""
@@ -168,6 +194,7 @@ def generar_guia_tipo2(producto: ProductoGuia, guia: GuiaIndividual, firma_bytes
     ws = wb.active
     _rellenar_producto(ws, producto.producto_sucamec, guia.cantidad, producto.unidad_abrev)
     _rellenar_destino_concesion_tipo2(ws, producto.polvorin)
+    _rellenar_resolucion_gerencia_tipo2(ws, producto.polvorin)
     _insertar_firma(ws, firma_bytes)
     buffer = BytesIO()
     wb.save(buffer)

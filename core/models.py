@@ -174,20 +174,23 @@ class DatosGenerales:
 
 @dataclass
 class PolvorinGuiaSucamec:
-    """Datos de un polvorin para completar las guias SUCAMEC (Formato N.° 23,
-    tipo 1 FAMESA-Polvorin y tipo 2 Polvorin-Unidad minera).
+    """Datos de una solicitud/guia SUCAMEC (Formato N.° 23, tipo 1
+    FAMESA-Polvorin y tipo 2 Polvorin-Unidad minera).
 
-    La resolucion, direccion y demas datos del polvorin (origen en tipo 2,
-    destino en tipo 1) NO se sobreescriben: se mantienen tal cual estan en el
-    Excel base/modelo de ese polvorin (por defecto el bundled con la app; si
-    hay mas de un polvorin con datos distintos, cada uno sube su propio par
-    de plantillas ya llenadas). Solo se completa automaticamente la
-    concesion/unidad minera de destino (tipo 2) y el producto/cantidad/
-    unidades de cada guia.
+    El polvorin en si NO se pide como dato de entrada: la direccion y la
+    resolucion de subdireccion del polvorin FAMESA (Huaral) ya estan
+    correctas en la plantilla por defecto de la app. Solo si la solicitud
+    usa un polvorin distinto se sube un par de plantillas propio (ya
+    llenado) en vez de usar la plantilla por defecto.
+
+    Lo que si varia por solicitud y se completa aqui: la concesion/unidad
+    minera de destino (tipo 2), la resolucion de gerencia relacionada con
+    la solicitud (bloque de "autorizacion excepcional" del destino en tipo
+    2) y el producto/cantidad/unidades de cada guia.
     """
 
     nombre: str
-    plantilla_tipo1_explosivos: bytes | None = None  # None = usar la plantilla por defecto
+    plantilla_tipo1_explosivos: bytes | None = None  # None = usar la plantilla FAMESA por defecto
     plantilla_tipo1_accesorios: bytes | None = None
     plantilla_tipo2: bytes | None = None
     concesion_nombre: str = ""
@@ -195,3 +198,5 @@ class PolvorinGuiaSucamec:
     concesion_distrito: str = ""
     concesion_provincia: str = ""
     concesion_departamento: str = ""
+    resolucion_gerencia_numero: str = ""
+    resolucion_gerencia_fecha: str = ""  # texto "DD/MM/AAAA"

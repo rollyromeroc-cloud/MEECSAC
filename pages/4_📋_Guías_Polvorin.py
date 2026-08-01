@@ -32,44 +32,33 @@ st.caption(
     "(ej. FAMESA) — eso se agregará en una siguiente etapa."
 )
 
-# --- Polvorines: solo la concesión de destino se edita aquí; la resolución,
-# dirección y demás datos del polvorín se mantienen tal cual el Excel base
-# (el bundled por defecto, o el que subas si ese polvorín tiene uno propio).
+# --- Solicitudes: el polvorín NO se pide — su dirección y resolución de
+# subdirección (FAMESA-Huaral) ya están correctas en la plantilla por
+# defecto. Por cada solicitud solo se completa la concesión de destino y la
+# resolución de gerencia relacionada con esa solicitud.
 st.divider()
-st.markdown("### Polvorines")
+st.markdown("### Solicitudes")
 st.caption(
-    "La resolución, dirección y ubicación del polvorín (origen en tipo 2, destino en "
-    "tipo 1) se mantienen exactamente como están en el Excel base — no se editan aquí. "
-    "Si tienes más de un polvorín con datos distintos, sube su propio par de plantillas "
-    "ya llenadas; si no subes nada, se usa la plantilla por defecto de la app. La "
-    "concesión/unidad minera de destino (solo tipo 2) sí se completa aquí, por polvorín."
+    "El polvorín no se pide como dato: la dirección y la resolución de subdirección de "
+    "FAMESA (Huaral) ya están correctas en la plantilla por defecto de la app. Por cada "
+    "solicitud completa la concesión de destino y la resolución de gerencia relacionada "
+    "con esa solicitud (bloque de autorización excepcional del Excel tipo 2). Solo sube "
+    "tus propias plantillas si usas un polvorín distinto a FAMESA (Huaral)."
 )
 
 n_polvorines = st.number_input(
-    "N.° de polvorines", min_value=0, max_value=8, value=st.session_state.get("n_polvorines", 0),
+    "N.° de solicitudes", min_value=0, max_value=8, value=st.session_state.get("n_polvorines", 0),
     key="n_polvorines",
 )
 
 polvorines: dict[str, PolvorinGuiaSucamec] = {}
 for i in range(int(n_polvorines)):
-    with st.expander(f"Polvorín {i + 1}", expanded=(i == 0)):
+    with st.expander(f"Solicitud N.° {i + 1}", expanded=(i == 0)):
         nombre_polvorin = st.text_input(
-            "Nombre del polvorín", value=f"Polvorín N.° {i + 1}", key=f"polv_nombre_{i}",
+            "Nombre de la solicitud/guía", value=f"Solicitud N.° {i + 1}", key=f"polv_nombre_{i}",
         )
 
-        st.markdown("**Plantillas base (opcional — si no subes, se usa la de la app)**")
-        pt1, pt2, pt3 = st.columns(3)
-        archivo_tipo1_explosivos = pt1.file_uploader(
-            "Base TIPO 1 — Explosivos", type=["xlsx"], key=f"polv_plantilla_t1e_{i}",
-        )
-        archivo_tipo1_accesorios = pt2.file_uploader(
-            "Base TIPO 1 — Accesorios", type=["xlsx"], key=f"polv_plantilla_t1a_{i}",
-        )
-        archivo_tipo2 = pt3.file_uploader(
-            "Base TIPO 2", type=["xlsx"], key=f"polv_plantilla_t2_{i}",
-        )
-
-        st.markdown("**Concesión / unidad minera de destino (solo tipo 2)**")
+        st.markdown("**Concesión / unidad minera de destino**")
         cm1, cm2 = st.columns(2)
         concesion_nombre = cm1.text_input("Nombre de la concesión", key=f"polv_conc_nombre_{i}")
         concesion_codigo = cm2.text_input("Código único", key=f"polv_conc_codigo_{i}")
@@ -78,8 +67,32 @@ for i in range(int(n_polvorines)):
         concesion_provincia = cd2.text_input("Provincia", key=f"polv_conc_provincia_{i}")
         concesion_departamento = cd3.text_input("Región/Departamento", key=f"polv_conc_departamento_{i}")
 
+        st.markdown("**Resolución de gerencia relacionada con la solicitud**")
+        rg1, rg2 = st.columns(2)
+        resolucion_gerencia_numero = rg1.text_input(
+            "N.° de resolución", key=f"polv_res_ger_num_{i}",
+            placeholder="Ej. 01463-2026-SUCAMEC/DEPP-SDAEPP",
+        )
+        resolucion_gerencia_fecha = rg2.text_input(
+            "Fecha de emisión (DD/MM/AAAA)", key=f"polv_res_ger_fecha_{i}",
+            placeholder="Ej. 12/05/2026",
+        )
+
+        with st.expander("¿Polvorín distinto a FAMESA (Huaral)? Sube tus propias plantillas", expanded=False):
+            st.caption("Si no subes nada aquí, se usa la plantilla FAMESA (Huaral) por defecto de la app.")
+            pt1, pt2, pt3 = st.columns(3)
+            archivo_tipo1_explosivos = pt1.file_uploader(
+                "Base TIPO 1 — Explosivos", type=["xlsx"], key=f"polv_plantilla_t1e_{i}",
+            )
+            archivo_tipo1_accesorios = pt2.file_uploader(
+                "Base TIPO 1 — Accesorios", type=["xlsx"], key=f"polv_plantilla_t1a_{i}",
+            )
+            archivo_tipo2 = pt3.file_uploader(
+                "Base TIPO 2", type=["xlsx"], key=f"polv_plantilla_t2_{i}",
+            )
+
         polvorin = PolvorinGuiaSucamec(
-            nombre=nombre_polvorin or f"Polvorín N.° {i + 1}",
+            nombre=nombre_polvorin or f"Solicitud N.° {i + 1}",
             plantilla_tipo1_explosivos=archivo_tipo1_explosivos.getvalue() if archivo_tipo1_explosivos else None,
             plantilla_tipo1_accesorios=archivo_tipo1_accesorios.getvalue() if archivo_tipo1_accesorios else None,
             plantilla_tipo2=archivo_tipo2.getvalue() if archivo_tipo2 else None,
@@ -88,6 +101,8 @@ for i in range(int(n_polvorines)):
             concesion_distrito=concesion_distrito,
             concesion_provincia=concesion_provincia,
             concesion_departamento=concesion_departamento,
+            resolucion_gerencia_numero=resolucion_gerencia_numero,
+            resolucion_gerencia_fecha=resolucion_gerencia_fecha,
         )
         polvorines[polvorin.nombre] = polvorin
 
@@ -137,7 +152,7 @@ for tipo in TIPOS_SUCAMEC_GUIAS:
             polvorin_asignado = None
             if c3 is not None:
                 seleccion = c3.selectbox(
-                    "Polvorín asignado", nombres_polvorines, key=f"polvorin_sel_{key_base}_{i}",
+                    "Solicitud asignada", nombres_polvorines, key=f"polvorin_sel_{key_base}_{i}",
                 )
                 polvorin_asignado = polvorines.get(seleccion)
             if cantidad > 0:
@@ -154,7 +169,7 @@ for tipo in TIPOS_SUCAMEC_GUIAS:
                     "Guía restante": resultado["guia_restante"],
                     "Cantidad restante": resultado["cantidad_restante"],
                     "Guías totales": resultado["guias_totales"],
-                    "Polvorín": polvorin_asignado.nombre if polvorin_asignado else "(sin asignar)",
+                    "Solicitud": polvorin_asignado.nombre if polvorin_asignado else "(sin asignar)",
                 })
                 if polvorin_asignado is not None:
                     productos_guia.append(ProductoGuia(
@@ -191,9 +206,9 @@ else:
     st.divider()
     st.markdown("### Excel SUCAMEC (tipo 1 y tipo 2) por guía")
     if not nombres_polvorines:
-        st.warning("Define al menos un polvorín arriba y asígnalo a cada producto para poder generar los Excel.")
+        st.warning("Define al menos una solicitud arriba y asígnala a cada producto para poder generar los Excel.")
     elif not productos_guia:
-        st.warning("Asigna un polvorín a cada producto/variante con cantidad solicitada para generar los Excel.")
+        st.warning("Asigna una solicitud a cada producto/variante con cantidad solicitada para generar los Excel.")
     else:
         st.caption(
             "Se genera un Excel TIPO 1 (FAMESA→Polvorín) y un Excel TIPO 2 (Polvorín→Unidad "
