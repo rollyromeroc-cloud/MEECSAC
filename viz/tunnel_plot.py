@@ -64,11 +64,11 @@ def _linea_con_separadores(lineas: list[np.ndarray]) -> tuple[list, list, list]:
 
 def _agregar_tramo_wireframe(
     fig: go.Figure, ancho: float, alto: float, longitud: float, x_inicio: float,
-    color: str, nombre_leyenda: str, n_anillos: int,
+    color: str, nombre_leyenda: str, n_anillos: int, forma: str | None = None,
 ) -> None:
     if longitud <= 0:
         return
-    malla = malla_tunel(ancho, alto, longitud, n_anillos=max(n_anillos, 2), x_inicio=x_inicio)
+    malla = malla_tunel(ancho, alto, longitud, n_anillos=max(n_anillos, 2), x_inicio=x_inicio, forma=forma)
     xs, ys, zs = _linea_con_separadores(malla["anillos"])
     fig.add_trace(
         go.Scatter3d(
@@ -279,11 +279,11 @@ def build_tunnel_figure(
     else:
         _agregar_tramo_wireframe(
             fig, labor.ancho_m, labor.alto_m, longitud_existente, 0.0,
-            COLOR_EXISTENTE, "Tramo existente", n_anillos_existente,
+            COLOR_EXISTENTE, "Tramo existente", n_anillos_existente, forma=labor.forma_seccion,
         )
         _agregar_tramo_wireframe(
             fig, labor.ancho_m, labor.alto_m, avance_proyectado, longitud_existente,
-            COLOR_PROYECTADO, "Tramo proyectado", n_anillos_proyectado,
+            COLOR_PROYECTADO, "Tramo proyectado", n_anillos_proyectado, forma=labor.forma_seccion,
         )
 
     if longitud_existente > 0:
@@ -356,6 +356,7 @@ def build_tunnel_figure_solido(
             labor.ancho_m, labor.alto_m, longitud_existente, avance_proyectado,
             n_anillos_existente=max(n_anillos_existente, 2) if longitud_existente > 0 else 0,
             n_anillos_proyectado=n_anillos_proyectado,
+            forma=labor.forma_seccion,
         )
     vertices = malla["vertices"]
     triangulos = malla["triangulos"]

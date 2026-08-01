@@ -8,10 +8,13 @@ del polvorin FAMESA-Huaral, o subidas por el usuario si la solicitud usa un
 polvorin distinto) son los modelos reales ya llenados: se abren tal cual y
 solo se sobreescriben las celdas de producto/cantidad/unidades, la firma (si
 se sube una imagen) y, en tipo 2, la concesion/unidad minera de destino mas
-su resolucion de gerencia (autorizacion excepcional de uso). La resolucion
-de subdireccion, direccion y demas datos propios del polvorin (destino en
-tipo 1, origen en tipo 2) NO se tocan: se mantienen exactamente como estan
-en el Excel base de esa solicitud.
+su resolucion de gerencia (autorizacion excepcional de uso). La direccion y
+demas datos propios del polvorin (destino en tipo 1, origen en tipo 2) NO se
+tocan: se mantienen exactamente como estan en el Excel base de esa
+solicitud. La UNICA excepcion es la resolucion de subdireccion del bloque
+de ORIGEN en tipo 2: se sobreescribe con la misma resolucion que trae la
+plantilla TIPO 1 de esa categoria (Explosivos/Accesorios), porque es el
+mismo polvorin y debe coincidir en ambos tipos de guia.
 """
 
 from __future__ import annotations
@@ -96,6 +99,44 @@ def _rellenar_destino_concesion_tipo2(ws, polvorin: PolvorinGuiaSucamec) -> None
         ws["S55"] = polvorin.concesion_provincia
     if polvorin.concesion_departamento:
         ws["AE55"] = polvorin.concesion_departamento
+
+
+def _leer_resolucion_subdireccion_tipo1(datos_plantilla: bytes | None, ruta_por_defecto: Path) -> dict | None:
+    """Lee la resolución de subdirección (N.° + fecha, celdas S59/AE59/AH59/
+    AK59) de la plantilla TIPO 1 — la misma plantilla que usa
+    `generar_guia_tipo1` para esa categoría — para poder replicarla en el
+    bloque de ORIGEN de TIPO 2 (mismo polvorín, misma resolución)."""
+    wb = _cargar_plantilla(datos_plantilla, ruta_por_defecto)
+    ws = wb.active
+    numero = ws["S59"].value
+    if not numero:
+        return None
+    return {
+        "numero": numero,
+        "dia": ws["AE59"].value,
+        "mes": ws["AH59"].value,
+        "anio": ws["AK59"].value,
+    }
+
+
+def _rellenar_resolucion_origen_tipo2(ws, producto: ProductoGuia) -> None:
+    """Bloque de resolución de ORIGEN (filas 46-48 del Excel TIPO 2): debe
+    ser la misma resolución de subdirección del polvorín que aparece en la
+    plantilla TIPO 1 de esa categoría (Explosivos/Accesorios) — no un
+    número aparte fijo en la plantilla TIPO 2."""
+    plantilla_tipo1 = (
+        producto.polvorin.plantilla_tipo1_explosivos
+        if producto.categoria == "Explosivos"
+        else producto.polvorin.plantilla_tipo1_accesorios
+    )
+    ruta_por_defecto = RAIZ_PLANTILLAS / PLANTILLA_GUIA_TIPO1[producto.categoria]
+    resolucion = _leer_resolucion_subdireccion_tipo1(plantilla_tipo1, ruta_por_defecto)
+    if resolucion is None:
+        return
+    ws["S48"] = resolucion["numero"]
+    ws["AE48"] = resolucion["dia"]
+    ws["AH48"] = resolucion["mes"]
+    ws["AK48"] = resolucion["anio"]
 
 
 def _rellenar_resolucion_gerencia_tipo2(ws, polvorin: PolvorinGuiaSucamec) -> None:
@@ -193,6 +234,7 @@ def generar_guia_tipo2(producto: ProductoGuia, guia: GuiaIndividual, firma_bytes
     wb = _cargar_plantilla(producto.polvorin.plantilla_tipo2, ruta_por_defecto)
     ws = wb.active
     _rellenar_producto(ws, producto.producto_sucamec, guia.cantidad, producto.unidad_abrev)
+    _rellenar_resolucion_origen_tipo2(ws, producto)
     _rellenar_destino_concesion_tipo2(ws, producto.polvorin)
     _rellenar_resolucion_gerencia_tipo2(ws, producto.polvorin)
     _insertar_firma(ws, firma_bytes)

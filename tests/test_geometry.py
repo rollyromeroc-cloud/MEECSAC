@@ -3,12 +3,16 @@ from collections import Counter
 import numpy as np
 import pytest
 
+from core.constants import FORMAS_SECCION
 from core.geometry import (
     malla_solida_pique,
     malla_solida_tunel,
     malla_tunel,
+    perfil_baul,
     perfil_circular,
     perfil_herradura,
+    perfil_herradura_pura,
+    perfil_trapezoidal,
     relacion_aspecto,
 )
 
@@ -50,6 +54,47 @@ def test_perfil_herradura_arco_completo_si_ancho_grande():
     alto_muro_esperado = 0.0
     # el primer punto de muro (índice 1) debe coincidir en altura con el piso
     assert perfil[1, 1] == pytest.approx(alto_muro_esperado, abs=1e-9)
+
+
+def test_perfil_baul_siempre_tiene_hastiales_rectos():
+    # a diferencia de perfil_herradura, el arco nunca "come" todo el muro,
+    # sea cual sea la relacion ancho/alto (incluso con ancho >> alto).
+    for ancho, alto in ((1.77, 1.10), (10.0, 1.0), (1.0, 3.0)):
+        perfil = perfil_baul(ancho, alto)
+        # el segundo punto (fin del muro recto) debe estar a una altura > 0
+        assert perfil[1, 1] > 0.0
+        # el muro nunca ocupa mas de toda la altura ni el arco menos de la mitad
+        assert perfil[1, 1] >= alto * 0.5 - 1e-9
+
+
+def test_perfil_herradura_pura_no_tiene_hastiales_rectos():
+    perfil = perfil_herradura_pura(ancho=1.77, alto=1.10)
+    # el "muro" (segundo punto) coincide en altura con el piso: sin tramo recto
+    assert perfil[1, 1] == pytest.approx(0.0, abs=1e-9)
+    # el arco sale directo del piso hacia la corona a la altura total
+    corona = perfil[len(perfil) // 2]
+    assert corona[1] == pytest.approx(1.10, abs=1e-2)
+
+
+def test_perfil_trapezoidal_hastiales_inclinados():
+    perfil = perfil_trapezoidal(ancho=2.0, alto=1.5, factor_techo=0.6)
+    assert len(perfil) == 4
+    ancho_piso = perfil[3, 0] - perfil[0, 0]
+    ancho_techo = perfil[2, 0] - perfil[1, 0]
+    assert ancho_piso == pytest.approx(2.0)
+    assert ancho_techo == pytest.approx(2.0 * 0.6)
+    assert perfil[1, 1] == pytest.approx(1.5)
+    assert perfil[2, 1] == pytest.approx(1.5)
+
+
+def test_malla_solida_tunel_todas_las_formas_son_hermeticas():
+    for forma in FORMAS_SECCION:
+        malla = malla_solida_tunel(
+            ancho=1.77, alto=1.10, longitud_existente=9.0, avance_proyectado=66.0,
+            n_anillos_existente=4, n_anillos_proyectado=6, forma=forma,
+        )
+        assert _es_hermetico(malla["triangulos"]), forma
+        assert _euler(malla["vertices"], malla["triangulos"]) == 2, forma
 
 
 def test_malla_tunel_forma_y_extremos():

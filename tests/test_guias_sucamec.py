@@ -96,12 +96,17 @@ def test_generar_zip_guias_dos_variantes_no_se_combinan():
         assert "CONCESION DE PRUEBA" in ws2["E51"].value
         assert "99999999X01" in ws2["E51"].value
         assert ws2["E55"].value == POLVORIN_PRUEBA.concesion_distrito
-        # La resolucion de gerencia de la solicitud (bloque destino) tambien
-        # se completa; la de subdireccion del polvorin (bloque origen) no.
+        # La resolucion de gerencia de la solicitud (bloque destino) se
+        # completa con lo escrito para la solicitud.
         assert ws2["S59"].value == "N° 01463-2026-SUCAMEC/DEPP-SDAEPP"
         assert (ws2["AE59"].value, ws2["AH59"].value, ws2["AK59"].value) == (12, 5, 2026)
-        resolucion_origen_original = _valor_original(PLANTILLA_GUIA_TIPO2, "S48")
-        assert ws2["S48"].value == resolucion_origen_original
+        # La resolucion de subdireccion del bloque ORIGEN debe coincidir con
+        # la de la plantilla TIPO 1 de esa categoria (mismo polvorin) — NO
+        # con el numero propio (distinto) que trae la plantilla TIPO 2 base.
+        assert ws2["S48"].value == resolucion_original_t1
+        assert (ws2["AE48"].value, ws2["AH48"].value, ws2["AK48"].value) == (3, 3, 2026)
+        resolucion_propia_t2 = _valor_original(PLANTILLA_GUIA_TIPO2, "S48")
+        assert ws2["S48"].value != resolucion_propia_t2
 
 
 def test_resolucion_gerencia_vacia_no_sobreescribe_bloque_destino():
@@ -153,6 +158,16 @@ def test_generar_zip_guias_categoria_accesorios_usa_plantilla_correcta():
         # Categoria Accesorios -> debe usar la plantilla de accesorios (con su propia
         # direccion de destino), no la de explosivos.
         assert ws["E51"].value == direccion_original_accesorios
+
+        nombre_tipo2 = next(n for n in zf.namelist() if n.startswith("TIPO2_Detonador_X"))
+        wb2 = openpyxl.load_workbook(BytesIO(zf.read(nombre_tipo2)))
+        ws2 = wb2.active
+        # La resolucion de subdireccion del bloque ORIGEN en tipo 2 debe ser
+        # la de la plantilla TIPO 1 de Accesorios (no la de Explosivos).
+        resolucion_original_accesorios = _valor_original(PLANTILLA_GUIA_TIPO1["Accesorios"], "S59")
+        assert ws2["S48"].value == resolucion_original_accesorios
+        resolucion_original_explosivos = _valor_original(PLANTILLA_GUIA_TIPO1["Explosivos"], "S59")
+        assert ws2["S48"].value != resolucion_original_explosivos
 
 
 def _bytes_plantilla_modificada(ruta_relativa, celda, valor_nuevo) -> bytes:

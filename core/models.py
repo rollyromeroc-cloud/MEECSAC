@@ -18,6 +18,8 @@ from core.constants import (
     ZONA_UTM_DEFAULT,
 )
 
+FORMA_SECCION_DEFAULT = "Baúl (hastiales rectos)"
+
 
 @dataclass
 class LaborMinera:
@@ -27,9 +29,12 @@ class LaborMinera:
     tipo: str = "Galería"
     etapa: str = "Desarrollo"
 
-    # Sección del túnel/labor
+    # Sección del túnel/labor. forma_seccion solo aplica a labores
+    # horizontales (Pique/Chimenea siempre son circulares verticales, ver
+    # LABORES_VERTICALES / malla_solida_pique).
     ancho_m: float = 0.0
     alto_m: float = 0.0
+    forma_seccion: str = FORMA_SECCION_DEFAULT
 
     # Avance
     longitud_existente_m: float = 0.0

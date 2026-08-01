@@ -25,6 +25,15 @@ TIPOS_LABOR = [
 # "longitud existente"/"avance": altura en vez de longitud horizontal).
 LABORES_VERTICALES = {"Pique", "Chimenea"}
 
+# Forma de la sección transversal (solo labores horizontales — Pique/Chimenea
+# siempre usan sección circular vertical, ver core.geometry.malla_solida_pique).
+FORMAS_SECCION = [
+    "Baúl (hastiales rectos)",
+    "Herradura (sin hastiales rectos)",
+    "Trapezoidal",
+    "Circular",
+]
+
 TIPOS_ROCA = ["Suave", "Intermedia", "Dura", "Muy dura"]
 
 # Peso específico típico (TM/m³) — referencial, editable por labor.

@@ -25,17 +25,69 @@ def perfil_herradura(ancho: float, alto: float, n_arco: int = 24) -> np.ndarray:
     radio = ancho / 2.0
     flecha = min(radio, alto)
     alto_muro = alto - flecha
+    return _perfil_arco_con_muro(radio, alto_muro, flecha, n_arco)
 
+
+def perfil_baul(ancho: float, alto: float, n_arco: int = 24) -> np.ndarray:
+    """Contorno 2D (y, z) de una sección tipo baúl: muros verticales rectos
+    (hastiales rectos) garantizados hasta al menos la mitad de la altura, y
+    arco semi-elíptico hasta la corona en la mitad superior — a diferencia
+    de `perfil_herradura`, el arco nunca ocupa más de la mitad de la altura
+    (nunca "come" todo el muro), sea cual sea la relación ancho/alto."""
+    radio = ancho / 2.0
+    flecha = min(radio, alto * 0.5)
+    alto_muro = alto - flecha
+    return _perfil_arco_con_muro(radio, alto_muro, flecha, n_arco)
+
+
+def perfil_herradura_pura(ancho: float, alto: float, n_arco: int = 24) -> np.ndarray:
+    """Contorno 2D (y, z) de una sección tipo herradura SIN hastiales
+    rectos: el arco semi-elíptico ocupa toda la altura desde el piso, sin
+    tramo de muro vertical (a diferencia de `perfil_baul`)."""
+    radio = ancho / 2.0
+    return _perfil_arco_con_muro(radio, 0.0, alto, n_arco)
+
+
+def _perfil_arco_con_muro(radio: float, alto_muro: float, flecha: float, n_arco: int) -> np.ndarray:
     puntos = [(-radio, 0.0), (-radio, alto_muro)]
-
     angulos = np.linspace(np.pi, 0.0, n_arco)
     for ang in angulos:
         y = radio * np.cos(ang)
         z = alto_muro + flecha * np.sin(ang)
         puntos.append((y, z))
-
     puntos.append((radio, 0.0))
     return np.array(puntos)
+
+
+def perfil_trapezoidal(ancho: float, alto: float, factor_techo: float = 0.6) -> np.ndarray:
+    """Contorno 2D (y, z) de una sección trapezoidal: piso de ancho `ancho`,
+    techo plano centrado más angosto (`ancho * factor_techo`) y hastiales
+    rectos inclinados — típico de labores pequeñas sin sostenimiento en
+    arco. Sin discretizar (4 vértices, aristas rectas)."""
+    radio_piso = ancho / 2.0
+    radio_techo = (ancho * factor_techo) / 2.0
+    return np.array([
+        (-radio_piso, 0.0),
+        (-radio_techo, alto),
+        (radio_techo, alto),
+        (radio_piso, 0.0),
+    ])
+
+
+def _perfil_por_forma(forma: str | None, ancho: float, alto: float, n_arco: int) -> np.ndarray:
+    """Despacha el contorno 2D según `forma` (uno de FORMAS_SECCION). Si
+    `forma` no coincide con ninguna opción explícita (p. ej. None, para
+    compatibilidad con llamadas que no la especifican), usa la heurística
+    original de `perfil_herradura`."""
+    if forma == "Circular":
+        return perfil_circular(ancho, n_arco=n_arco)
+    if forma == "Trapezoidal":
+        return perfil_trapezoidal(ancho, alto)
+    if forma == "Herradura (sin hastiales rectos)":
+        return perfil_herradura_pura(ancho, alto, n_arco=n_arco)
+    if forma == "Baúl (hastiales rectos)":
+        return perfil_baul(ancho, alto, n_arco=n_arco)
+    return perfil_herradura(ancho, alto, n_arco=n_arco)
 
 
 def malla_tunel(
@@ -45,13 +97,16 @@ def malla_tunel(
     n_anillos: int = 14,
     n_arco: int = 24,
     x_inicio: float = 0.0,
+    forma: str | None = None,
 ) -> dict:
     """Anillos (secciones transversales) y líneas longitudinales de un tramo
     de túnel extruido a lo largo del eje X (de `x_inicio` a
     `x_inicio + longitud`), listos para dibujarse como wireframe 3D.
 
     `x_inicio` permite encadenar dos tramos (p. ej. longitud existente y
-    avance proyectado) sin recalcular el perfil.
+    avance proyectado) sin recalcular el perfil. `forma` selecciona la
+    sección transversal (ver `FORMAS_SECCION`); si se omite, se usa la
+    heurística de `perfil_herradura`.
 
     Devuelve un dict con:
       - "anillos": lista de arrays (n_perfil, 3) con columnas (x, y, z)
@@ -59,7 +114,7 @@ def malla_tunel(
         perfil (piso izquierdo, corona, piso derecho)
       - "perfil": el contorno 2D usado (y, z)
     """
-    perfil = perfil_herradura(ancho, alto, n_arco=n_arco)
+    perfil = _perfil_por_forma(forma, ancho, alto, n_arco)
     xs = np.linspace(x_inicio, x_inicio + longitud, n_anillos)
 
     anillos = [
@@ -223,12 +278,15 @@ def malla_solida_tunel(
     n_anillos_existente: int = 8,
     n_anillos_proyectado: int = 14,
     n_arco: int = 24,
+    forma: str | None = None,
 ) -> dict:
-    """Vértices y triángulos de un sólido cerrado tipo herradura (piso +
-    muros/arco + tapas en el portal y en la punta del avance proyectado)
-    para el tramo existente y el proyectado. Ver `_malla_solida_generica`
-    para el formato de retorno."""
-    perfil = perfil_herradura(ancho, alto, n_arco=n_arco)
+    """Vértices y triángulos de un sólido cerrado (piso + muros/arco + tapas
+    en el portal y en la punta del avance proyectado) para el tramo
+    existente y el proyectado. `forma` selecciona la sección transversal
+    (ver `FORMAS_SECCION`); si se omite, se usa la heurística de
+    `perfil_herradura`. Ver `_malla_solida_generica` para el formato de
+    retorno."""
+    perfil = _perfil_por_forma(forma, ancho, alto, n_arco)
 
     def colocar_3d(punto: tuple[float, float], x: float) -> tuple[float, float, float]:
         y, z = punto

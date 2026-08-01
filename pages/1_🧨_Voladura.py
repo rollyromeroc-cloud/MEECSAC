@@ -11,6 +11,7 @@ LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_meecsac.jp
 from core.constants import (
     DESTINOS_MATERIAL,
     EQUIPOS_PERFORACION,
+    FORMAS_SECCION,
     LABORES_VERTICALES,
     TIPOS_CORTE,
     TIPOS_EXPLOSIVO_DEFAULT,
@@ -58,6 +59,10 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
         with c2:
             ancho = st.number_input("Ancho de sección (m)", min_value=0.0, value=1.77, step=0.01)
             alto = st.number_input("Alto de sección (m)", min_value=0.0, value=1.10, step=0.01)
+            forma_seccion = st.selectbox(
+                "Forma de la sección", FORMAS_SECCION,
+                help="Solo aplica a labores horizontales — Pique y Chimenea siempre usan sección circular vertical.",
+            )
             tipo_roca = st.selectbox("Tipo de roca", TIPOS_ROCA, index=1)
         with c3:
             destino = st.selectbox("Destino del material", DESTINOS_MATERIAL)
@@ -112,6 +117,7 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                     etapa=etapa,
                     ancho_m=ancho,
                     alto_m=alto,
+                    forma_seccion=forma_seccion,
                     longitud_existente_m=longitud_existente,
                     avance_proyectado_m=avance_proyectado,
                     avance_por_disparo_m=avance_por_disparo,
@@ -312,6 +318,7 @@ else:
             st.caption(f"Rumbo: {rumbo:.1f}° · Pendiente: {pendiente_deg:.1f}°")
         malla_dxf = malla_solida_tunel(
             labor_actual.ancho_m, labor_actual.alto_m, longitud_existente_dxf, avance_proyectado_dxf,
+            forma=labor_actual.forma_seccion,
         )
 
     if rotacion is not None:
