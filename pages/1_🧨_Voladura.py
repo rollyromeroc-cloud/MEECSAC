@@ -27,7 +27,11 @@ from core.georef import (
 )
 from core.memoria import memoria_calculo
 from core.models import DatosGenerales, LaborMinera
-from core.voladura import calcular_programa
+from core.voladura import (
+    avance_desde_n_disparos,
+    avance_desde_produccion_objetivo,
+    calcular_programa,
+)
 from reports.docx_builder import build_voladura_report
 from reports.dxf_export import construir_dxf_labor
 from viz.tunnel_plot import build_tunnel_figure, build_tunnel_figure_solido
@@ -50,6 +54,22 @@ st.write(
 )
 
 with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=len(st.session_state["labores"]) == 0):
+    st.caption(
+        "Solo se piden las variables del programa (labor, sección, longitud, "
+        "avance por disparo, taladros por disparo). El diseño de perforación, "
+        "los explosivos y las densidades ya usan el criterio estándar de la "
+        "OTS — ajústalos en 'Parámetros avanzados' solo si un caso puntual lo requiere."
+    )
+    modo_programa = st.selectbox(
+        "Dato de programa que ya tienes",
+        ["Longitud programada (m)", "N.° de disparos programado", "Producción objetivo (TM)"],
+        key="modo_programa_nueva_labor",
+        help=(
+            "Elige el dato que ya conoces del plan mensual; el resto (longitud "
+            "programada, N.° de disparos o producción, según corresponda) se "
+            "calcula automáticamente con el mismo criterio de la OTS."
+        ),
+    )
     with st.form("form_labor", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -63,54 +83,79 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                 "Forma de la sección", FORMAS_SECCION,
                 help="Solo aplica a labores horizontales — Pique y Chimenea siempre usan sección circular vertical.",
             )
-            tipo_roca = st.selectbox("Tipo de roca", TIPOS_ROCA, index=1)
         with c3:
             destino = st.selectbox("Destino del material", DESTINOS_MATERIAL)
-            densidad_desmonte = st.number_input("Peso específico desmonte (TM/m³)", value=2.70)
-            densidad_mineral = st.number_input("Peso específico mineral (TM/m³)", value=3.00)
-
-        st.markdown("**Avance**")
-        c4, c5, c6 = st.columns(3)
-        with c4:
             longitud_existente = st.number_input("Longitud/altura existente (m)", value=0.0)
+
+        st.markdown("**Programa de avance**")
+        c4, c5 = st.columns(2)
+        with c4:
+            avance_por_disparo = st.number_input("Avance x disparo (m)", value=1.10)
         with c5:
-            avance_proyectado = st.number_input("Avance proyectado (m)", value=66.0)
-        with c6:
-            avance_por_disparo = st.number_input("Avance promedio por disparo (m)", value=1.10)
+            taladros_cargados = st.number_input("N.° taladros x disparo", min_value=0, value=23, step=1)
 
-        st.markdown("**Diseño de perforación**")
-        c7, c8, c9 = st.columns(3)
-        with c7:
-            diametro_barreno = st.number_input("Diámetro de barreno (mm)", value=36.0)
-            longitud_barreno = st.number_input("Longitud de barreno (pies)", value=4.0)
-        with c8:
-            equipo = st.selectbox("Equipo de perforación", EQUIPOS_PERFORACION)
-            tipo_corte = st.selectbox("Tipo de corte", TIPOS_CORTE)
-        with c9:
-            taladros_cargados = st.number_input("Taladros cargados por disparo", min_value=0, value=23, step=1)
-            taladros_alivio = st.number_input("Taladros de alivio", min_value=0, value=2, step=1)
+        avance_proyectado_input = n_disparos_input = produccion_objetivo_input = None
+        if modo_programa == "Longitud programada (m)":
+            avance_proyectado_input = st.number_input("Longitud programada (m)", value=66.0)
+        elif modo_programa == "N.° de disparos programado":
+            n_disparos_input = st.number_input("N.° de disparos programado", min_value=0, value=60, step=1)
+        else:
+            produccion_objetivo_input = st.number_input("Producción objetivo (TM)", min_value=0.0, value=346.96)
 
-        st.markdown("**Explosivos y accesorios**")
-        c10, c11, c12 = st.columns(3)
-        with c10:
-            cartuchos_por_taladro = st.number_input("Cartuchos por taladro", min_value=0, value=4, step=1)
-            peso_cartucho = st.number_input("Peso por cartucho (kg)", value=0.08, format="%.3f")
-        with c11:
-            tipo_explosivo_1 = st.text_input("Explosivo tipo 1", value=TIPOS_EXPLOSIVO_DEFAULT[0])
-            pct_1 = st.number_input("% explosivo tipo 1", min_value=0.0, max_value=100.0, value=40.0)
-        with c12:
-            tipo_explosivo_2 = st.text_input("Explosivo tipo 2", value=TIPOS_EXPLOSIVO_DEFAULT[1])
-            pct_2 = st.number_input("% explosivo tipo 2", min_value=0.0, max_value=100.0, value=60.0)
+        with st.expander("Parámetros avanzados (criterio OTS)", icon=":material/tune:"):
+            st.markdown("**Diseño de perforación**")
+            c7, c8, c9 = st.columns(3)
+            with c7:
+                diametro_barreno = st.number_input("Diámetro de barreno (mm)", value=36.0)
+                longitud_barreno = st.number_input("Longitud de barreno (pies)", value=4.0)
+            with c8:
+                equipo = st.selectbox("Equipo de perforación", EQUIPOS_PERFORACION)
+                tipo_corte = st.selectbox("Tipo de corte", TIPOS_CORTE)
+            with c9:
+                taladros_alivio = st.number_input("Taladros de alivio", min_value=0, value=2, step=1)
+                tipo_roca = st.selectbox("Tipo de roca", TIPOS_ROCA, index=1)
+
+            st.markdown("**Explosivos y accesorios**")
+            c10, c11, c12 = st.columns(3)
+            with c10:
+                cartuchos_por_taladro = st.number_input("Cartuchos por taladro", min_value=0, value=4, step=1)
+                peso_cartucho = st.number_input("Peso por cartucho (kg)", value=0.08, format="%.3f")
+            with c11:
+                tipo_explosivo_1 = st.text_input("Explosivo tipo 1", value=TIPOS_EXPLOSIVO_DEFAULT[0])
+                pct_1 = st.number_input("% explosivo tipo 1", min_value=0.0, max_value=100.0, value=40.0)
+            with c12:
+                tipo_explosivo_2 = st.text_input("Explosivo tipo 2", value=TIPOS_EXPLOSIVO_DEFAULT[1])
+                pct_2 = st.number_input("% explosivo tipo 2", min_value=0.0, max_value=100.0, value=60.0)
+
+            st.markdown("**Densidades**")
+            c13, c14 = st.columns(2)
+            with c13:
+                densidad_desmonte = st.number_input("Peso específico desmonte (TM/m³)", value=2.70)
+            with c14:
+                densidad_mineral = st.number_input("Peso específico mineral (TM/m³)", value=3.00)
 
         observaciones = st.text_area("Observaciones", value="")
 
         enviado = st.form_submit_button("Agregar labor", icon=":material/add:", type="primary")
         if enviado:
+            densidad_usada = densidad_mineral if destino == "Mineral" else densidad_desmonte
             if not nombre:
                 st.error("Ingresa un nombre para la labor.")
             elif abs(pct_1 + pct_2 - 100.0) > 0.01:
                 st.error("Los porcentajes de explosivo deben sumar 100%.")
+            elif modo_programa == "N.° de disparos programado" and avance_por_disparo <= 0:
+                st.error("El avance x disparo debe ser mayor a 0 para calcular la longitud a partir del N.° de disparos.")
+            elif modo_programa == "Producción objetivo (TM)" and (ancho * alto <= 0 or densidad_usada <= 0):
+                st.error("La sección (ancho × alto) y la densidad deben ser mayores a 0 para calcular la longitud a partir de la producción objetivo.")
             else:
+                if modo_programa == "Longitud programada (m)":
+                    avance_proyectado = avance_proyectado_input
+                elif modo_programa == "N.° de disparos programado":
+                    avance_proyectado = avance_desde_n_disparos(int(n_disparos_input), avance_por_disparo)
+                else:
+                    avance_proyectado = avance_desde_produccion_objetivo(
+                        produccion_objetivo_input, ancho, alto, densidad_usada
+                    )
                 labor = LaborMinera(
                     nombre=nombre,
                     tipo=tipo,
@@ -156,12 +201,16 @@ tabla = pd.DataFrame(
     [
         {
             "Labor": labor.nombre,
+            "Sección (m)": f"{labor.ancho_m} × {labor.alto_m}",
+            "Longitud programa (m)": labor.avance_proyectado_m,
+            "Producción mineral (TM)": round(r.tonelaje_total_tm, 2) if labor.destino_material == "Mineral" else 0.0,
+            "Producción desmonte (TM)": round(r.tonelaje_total_tm, 2) if labor.destino_material == "Desmonte" else 0.0,
+            "Avance x disparo (m)": labor.avance_por_disparo_m,
+            "N.° taladros x disparo": labor.taladros_cargados,
+            "N.° disparos": r.n_disparos,
             "Tipo": labor.tipo,
             "Etapa": labor.etapa,
-            "Sección (m)": f"{labor.ancho_m} × {labor.alto_m}",
             "Área (m²)": round(r.area_m2, 3),
-            "Avance (m)": labor.avance_proyectado_m,
-            "N.° disparos": r.n_disparos,
             "Explosivo total (kg)": round(r.explosivo_total_kg, 2),
             "Volumen total (m³)": round(r.volumen_total_m3, 2),
             "Tonelaje total (TM)": round(r.tonelaje_total_tm, 2),
@@ -376,11 +425,11 @@ with col_a:
     fig_avance = px.bar(
         tabla,
         x="Labor",
-        y="Avance (m)",
+        y="Longitud programa (m)",
         color="Etapa",
-        title="Avance proyectado por labor",
+        title="Longitud programada por labor",
     )
-    fig_avance.update_layout(yaxis_title="Avance (m)", xaxis_title=None)
+    fig_avance.update_layout(yaxis_title="Longitud programa (m)", xaxis_title=None)
     st.plotly_chart(fig_avance, use_container_width=True)
 
 with col_b:

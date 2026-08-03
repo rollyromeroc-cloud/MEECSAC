@@ -16,6 +16,21 @@ def pies_a_metros(pies: float) -> float:
     return pies * PIE_A_METROS
 
 
+def avance_desde_n_disparos(n_disparos: int, avance_por_disparo_m: float) -> float:
+    """Longitud programada implícita en un N.° de disparos objetivo."""
+    return n_disparos * avance_por_disparo_m
+
+
+def avance_desde_produccion_objetivo(
+    produccion_objetivo_tm: float, ancho_m: float, alto_m: float, densidad_tm_m3: float
+) -> float:
+    """Longitud programada implícita en una producción objetivo (TM)."""
+    area_m2 = ancho_m * alto_m
+    if area_m2 <= 0 or densidad_tm_m3 <= 0:
+        return 0.0
+    return produccion_objetivo_tm / (area_m2 * densidad_tm_m3)
+
+
 def calcular_resultado(labor: LaborMinera) -> ResultadoVoladura:
     area_m2 = labor.ancho_m * labor.alto_m
 

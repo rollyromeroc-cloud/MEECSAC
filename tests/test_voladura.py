@@ -4,7 +4,11 @@ informe técnico real (INFORME TECNICO OTS V&M.docx) para varias labores."""
 import pytest
 
 from core.models import LaborMinera
-from core.voladura import calcular_resultado
+from core.voladura import (
+    avance_desde_n_disparos,
+    avance_desde_produccion_objetivo,
+    calcular_resultado,
+)
 
 
 def test_galeria_nivel_2():
@@ -99,3 +103,19 @@ def test_pique_bajada_subnivel_02():
     assert r.tonelaje_total_tm == pytest.approx(665.28, abs=0.01)
     assert r.tonelaje_por_disparo_tm == pytest.approx(11.88, abs=0.01)
     assert r.factor_potencia_kg_tm == pytest.approx(0.62, abs=0.01)
+
+
+def test_avance_desde_n_disparos_coincide_con_galeria_nivel_2():
+    # Golden: Galería Nivel 2 -> n_disparos=60, avance_por_disparo=1.10 -> avance_proyectado=66.00
+    assert avance_desde_n_disparos(60, 1.10) == pytest.approx(66.00)
+
+
+def test_avance_desde_produccion_objetivo_coincide_con_galeria_nivel_2():
+    # Golden: Galería Nivel 2 -> tonelaje_total=346.96 TM, área=1.947 m², densidad=2.70 -> avance=66.00
+    avance = avance_desde_produccion_objetivo(346.96, 1.77, 1.10, 2.70)
+    assert avance == pytest.approx(66.00, abs=0.01)
+
+
+def test_avance_desde_produccion_objetivo_area_o_densidad_invalida_devuelve_cero():
+    assert avance_desde_produccion_objetivo(100.0, 0.0, 1.10, 2.70) == 0.0
+    assert avance_desde_produccion_objetivo(100.0, 1.77, 1.10, 0.0) == 0.0
