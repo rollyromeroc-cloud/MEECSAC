@@ -90,6 +90,14 @@ def _perfil_por_forma(forma: str | None, ancho: float, alto: float, n_arco: int)
     return perfil_herradura(ancho, alto, n_arco=n_arco)
 
 
+def _cerrar_anillo(anillo: np.ndarray) -> np.ndarray:
+    """Repite el primer punto al final para que, al dibujarse como línea,
+    el anillo quede cerrado (incluye el piso — la arista que conecta
+    piso-derecha con piso-izquierda) en vez de terminar abierto en el
+    último punto del perfil."""
+    return np.vstack([anillo, anillo[0]])
+
+
 def malla_tunel(
     ancho: float,
     alto: float,
@@ -118,7 +126,7 @@ def malla_tunel(
     xs = np.linspace(x_inicio, x_inicio + longitud, n_anillos)
 
     anillos = [
-        np.column_stack([np.full(len(perfil), x), perfil[:, 0], perfil[:, 1]])
+        _cerrar_anillo(np.column_stack([np.full(len(perfil), x), perfil[:, 0], perfil[:, 1]]))
         for x in xs
     ]
 
@@ -146,7 +154,7 @@ def malla_tunel_pique(
     zs = np.linspace(z_inicio, z_inicio + longitud, n_anillos)
 
     anillos = [
-        np.column_stack([perfil[:, 0], perfil[:, 1], np.full(len(perfil), z)])
+        _cerrar_anillo(np.column_stack([perfil[:, 0], perfil[:, 1], np.full(len(perfil), z)]))
         for z in zs
     ]
 
@@ -157,6 +165,49 @@ def malla_tunel_pique(
     ]
 
     return {"anillos": anillos, "longitudinales": longitudinales, "perfil": perfil}
+
+
+def anillos_de_avance_mensual(
+    ancho: float, alto: float, longitud_existente: float, avance_proyectado: float,
+    n_meses: int, forma: str | None = None, n_arco: int = 24,
+) -> list[np.ndarray]:
+    """Un anillo cerrado (ver `_cerrar_anillo`) por cada mes de
+    `avance_proyectado`, asumiendo avance uniforme (avance_proyectado /
+    n_meses por mes) — para marcar la programación mensual sobre el
+    esquema. Los anillos quedan en x = longitud_existente + k * avance
+    mensual, k = 1..n_meses (el último coincide con el final del avance
+    proyectado). Devuelve lista vacía si no hay avance proyectado o meses
+    que marcar."""
+    if n_meses <= 0 or avance_proyectado <= 0:
+        return []
+    perfil = _perfil_por_forma(forma, ancho, alto, n_arco)
+    avance_mensual = avance_proyectado / n_meses
+    return [
+        _cerrar_anillo(np.column_stack([
+            np.full(len(perfil), longitud_existente + k * avance_mensual),
+            perfil[:, 0], perfil[:, 1],
+        ]))
+        for k in range(1, n_meses + 1)
+    ]
+
+
+def anillos_de_avance_mensual_pique(
+    diametro: float, longitud_existente: float, avance_proyectado: float,
+    n_meses: int, n_arco: int = 24,
+) -> list[np.ndarray]:
+    """Análogo de `anillos_de_avance_mensual` para Pique/Chimenea (eje
+    local Z en vez de X)."""
+    if n_meses <= 0 or avance_proyectado <= 0:
+        return []
+    perfil = perfil_circular(diametro, n_arco=n_arco)
+    avance_mensual = avance_proyectado / n_meses
+    return [
+        _cerrar_anillo(np.column_stack([
+            perfil[:, 0], perfil[:, 1],
+            np.full(len(perfil), longitud_existente + k * avance_mensual),
+        ]))
+        for k in range(1, n_meses + 1)
+    ]
 
 
 def _franja_triangulos(idx_a: list[int], idx_b: list[int], n_perfil: int) -> list[tuple[int, int, int]]:

@@ -157,10 +157,11 @@ def _add_labor_section(
         document.add_paragraph(labor.observaciones)
 
     try:
-        constructor_figura = build_tunnel_figure_solido if estilo_esquema == "solido" else build_tunnel_figure
-        png_bytes = constructor_figura(labor, resultado).to_image(
-            format="png", width=900, height=550, scale=2
-        )
+        if estilo_esquema == "solido":
+            figura = build_tunnel_figure_solido(labor, resultado, n_meses=datos.periodo_meses)
+        else:
+            figura = build_tunnel_figure(labor, resultado)
+        png_bytes = figura.to_image(format="png", width=900, height=550, scale=2)
         document.add_picture(BytesIO(png_bytes), width=Inches(6))
     except Exception:
         document.add_paragraph("(Esquema 3D no disponible en este entorno)")

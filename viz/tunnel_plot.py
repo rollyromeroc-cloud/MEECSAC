@@ -17,6 +17,8 @@ import plotly.graph_objects as go
 
 from core.constants import LABORES_VERTICALES
 from core.geometry import (
+    anillos_de_avance_mensual,
+    anillos_de_avance_mensual_pique,
     malla_solida_pique,
     malla_solida_tunel,
     malla_tunel,
@@ -32,6 +34,7 @@ COLOR_EXISTENTE = "#999999"
 COLOR_PROYECTADO = "#88CCEE"
 COLOR_FRONTERA = "#CC6677"
 COLOR_COTA = "#444444"
+COLOR_ANILLO_MES = "#DDCC77"
 
 
 def _agregar_cota(
@@ -106,6 +109,38 @@ def _agregar_tramo_wireframe_pique(
             x=xs, y=ys, z=zs, mode="lines",
             line=dict(color=color, width=4), name=nombre_leyenda,
             showlegend=False, hoverinfo="skip",
+        )
+    )
+
+
+def _agregar_anillos_avance_mensual(
+    fig: go.Figure, anillos: list[np.ndarray], vertical: bool, offset_etiqueta: float,
+) -> None:
+    """Dibuja los anillos de avance mensual (`core.geometry.anillos_de_avance_mensual*`)
+    sobre la figura, con una etiqueta "Mes k" por anillo — para identificar
+    de un vistazo cuánto avance corresponde a cada mes de la programación."""
+    if not anillos:
+        return
+    xs, ys, zs = _linea_con_separadores(anillos)
+    fig.add_trace(
+        go.Scatter3d(
+            x=xs, y=ys, z=zs, mode="lines",
+            line=dict(color=COLOR_ANILLO_MES, width=4, dash="dot"),
+            name="Avance mensual programado", hoverinfo="skip",
+        )
+    )
+    tx, ty, tz, textos = [], [], [], []
+    for mes, anillo in enumerate(anillos, start=1):
+        if vertical:
+            tx.append(offset_etiqueta); ty.append(0.0); tz.append(anillo[0, 2])
+        else:
+            tx.append(anillo[0, 0]); ty.append(0.0); tz.append(offset_etiqueta)
+        textos.append(f"Mes {mes}")
+    fig.add_trace(
+        go.Scatter3d(
+            x=tx, y=ty, z=tz, mode="text", text=textos,
+            textposition="middle center", textfont=dict(color=COLOR_ANILLO_MES, size=11),
+            name="", showlegend=False, hoverinfo="skip",
         )
     )
 
@@ -331,10 +366,14 @@ def build_tunnel_figure_solido(
     labor: LaborMinera,
     resultado: ResultadoVoladura,
     n_anillos: int = 16,
+    n_meses: int | None = None,
 ) -> go.Figure:
     """Versión sólida y cerrada (piso/muros/arco + tapas, o cilindro para
     Pique/Chimenea) del mismo esquema, con el mismo esquema de colores
-    existente/proyectado."""
+    existente/proyectado. Si se indica `n_meses` (periodo del programa),
+    superpone un anillo punteado por cada mes de avance proyectado
+    (asumiendo avance uniforme), con su etiqueta "Mes k", para identificar
+    la programación mensual directamente sobre el sólido."""
     vertical = labor.tipo in LABORES_VERTICALES
     longitud_existente = max(labor.longitud_existente_m, 0.0)
     avance_proyectado = max(labor.avance_proyectado_m, 0.01)
@@ -375,6 +414,11 @@ def build_tunnel_figure_solido(
             opacity=1.0,
             hoverinfo="skip",
             showlegend=False,
+            # iluminación 100% ambiental: el piso (normal hacia abajo) se ve
+            # con el mismo color que muros/arco/tapas sin importar el ángulo
+            # de cámara — de lo contrario, con el sombreado por defecto de
+            # Plotly, las caras que miran hacia abajo se ven oscuras/ocultas.
+            lighting=dict(ambient=1.0, diffuse=0.0, specular=0.0),
         )
     )
     # trazas invisibles solo para que la leyenda muestre el significado de
@@ -390,6 +434,21 @@ def build_tunnel_figure_solido(
                     marker=dict(size=8, color=color), name=nombre,
                 )
             )
+
+    if n_meses:
+        radio = labor.ancho_m / 2.0
+        if vertical:
+            anillos_mes = anillos_de_avance_mensual_pique(
+                labor.ancho_m, longitud_existente, avance_proyectado, n_meses,
+            )
+            offset_etiqueta = radio * 1.35
+        else:
+            anillos_mes = anillos_de_avance_mensual(
+                labor.ancho_m, labor.alto_m, longitud_existente, avance_proyectado, n_meses,
+                forma=labor.forma_seccion,
+            )
+            offset_etiqueta = labor.alto_m + max(0.5, 0.08 * longitud_total) * 0.6
+        _agregar_anillos_avance_mensual(fig, anillos_mes, vertical, offset_etiqueta)
 
     if longitud_existente > 0:
         radio = labor.ancho_m / 2.0

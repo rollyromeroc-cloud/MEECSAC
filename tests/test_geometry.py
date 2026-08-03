@@ -5,6 +5,8 @@ import pytest
 
 from core.constants import FORMAS_SECCION
 from core.geometry import (
+    anillos_de_avance_mensual,
+    anillos_de_avance_mensual_pique,
     malla_solida_pique,
     malla_solida_tunel,
     malla_tunel,
@@ -220,3 +222,45 @@ def test_relacion_aspecto_avance_no_mide_igual_que_seccion():
     _, ry_corto, _ = relacion_aspecto(ancho=1.20, alto=1.20, longitud=1.10)
     _, ry_largo, _ = relacion_aspecto(ancho=1.20, alto=1.20, longitud=66.0)
     assert ry_largo < ry_corto
+
+
+def test_anillos_de_avance_mensual_uno_por_mes_uniforme():
+    anillos = anillos_de_avance_mensual(
+        ancho=1.77, alto=1.10, longitud_existente=9.0, avance_proyectado=66.0, n_meses=6,
+    )
+    assert len(anillos) == 6
+    avance_mensual = 66.0 / 6
+    for mes, anillo in enumerate(anillos, start=1):
+        assert anillo[0, 0] == pytest.approx(9.0 + mes * avance_mensual)
+        # cada anillo debe quedar cerrado (mismo primer y último punto)
+        assert (anillo[0] == anillo[-1]).all()
+    # el ultimo anillo coincide exactamente con el final del avance proyectado
+    assert anillos[-1][0, 0] == pytest.approx(9.0 + 66.0)
+
+
+def test_anillos_de_avance_mensual_vacio_sin_avance_o_sin_meses():
+    assert anillos_de_avance_mensual(ancho=1.77, alto=1.10, longitud_existente=9.0, avance_proyectado=0.0, n_meses=6) == []
+    assert anillos_de_avance_mensual(ancho=1.77, alto=1.10, longitud_existente=9.0, avance_proyectado=66.0, n_meses=0) == []
+
+
+def test_anillos_de_avance_mensual_respeta_la_forma_de_seccion():
+    for forma in FORMAS_SECCION:
+        anillos = anillos_de_avance_mensual(
+            ancho=1.77, alto=1.10, longitud_existente=0.0, avance_proyectado=12.0, n_meses=3, forma=forma,
+        )
+        assert len(anillos) == 3
+        for anillo in anillos:
+            assert (anillo[0] == anillo[-1]).all()
+
+
+def test_anillos_de_avance_mensual_pique_extruye_en_z():
+    anillos = anillos_de_avance_mensual_pique(
+        diametro=3.0, longitud_existente=0.0, avance_proyectado=40.0, n_meses=4,
+    )
+    assert len(anillos) == 4
+    avance_mensual = 40.0 / 4
+    for mes, anillo in enumerate(anillos, start=1):
+        assert anillo[0, 2] == pytest.approx(mes * avance_mensual)
+        # el radio del anillo debe coincidir con el diametro dado
+        assert np.hypot(anillo[0, 0], anillo[0, 1]) == pytest.approx(1.5)
+        assert (anillo[0] == anillo[-1]).all()

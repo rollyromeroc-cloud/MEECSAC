@@ -190,13 +190,27 @@ with c_estilo:
         "Estilo", ["Wireframe", "Sólido"], key="estilo_esquema", horizontal=True
     )
 idx_esquema = nombres.index(labor_a_graficar)
-constructor_figura = build_tunnel_figure_solido if estilo_esquema == "Sólido" else build_tunnel_figure
-fig_tunel = constructor_figura(labores[idx_esquema], resultados[idx_esquema])
+dg_esquema = st.session_state.setdefault("datos_generales", DatosGenerales())
+if estilo_esquema == "Sólido":
+    fig_tunel = build_tunnel_figure_solido(
+        labores[idx_esquema], resultados[idx_esquema], n_meses=dg_esquema.periodo_meses,
+    )
+else:
+    fig_tunel = build_tunnel_figure(labores[idx_esquema], resultados[idx_esquema])
 st.plotly_chart(fig_tunel, use_container_width=True)
-st.caption(
+leyenda_esquema = (
     "🩶 Gris = tramo ya existente · 🔵 Azul = avance proyectado · "
-    "línea punteada = frente actual."
+    "línea punteada roja = frente actual"
 )
+if estilo_esquema == "Sólido":
+    leyenda_esquema += (
+        " · línea punteada ámbar = avance mensual programado (asumiendo avance "
+        f"uniforme en {dg_esquema.periodo_meses} meses — ajustable en "
+        "'Datos generales del informe' más abajo)."
+    )
+else:
+    leyenda_esquema += "."
+st.caption(leyenda_esquema)
 
 st.subheader(":material/place: Georreferenciación y exportación DXF")
 st.caption(
