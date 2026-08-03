@@ -17,6 +17,7 @@ from io import BytesIO
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
 from docx.shared import Inches, Pt
 
 from core.constants import ACTIVIDADES_CICLICAS, DESCRIPCION_TIPO_LABOR, PROPOSITO_TIPO_LABOR
@@ -57,6 +58,40 @@ def _add_table(document: Document, headers: list[str], rows: list[list]) -> None
         cells = table.add_row().cells
         for i, val in enumerate(row):
             cells[i].text = _fmt(val) if not isinstance(val, str) else val
+
+
+def _add_ecuacion(document: Document, sustitucion: str, resultado: str) -> None:
+    """Inserta una ecuación nativa de Word (objeto de fórmula OMML, editable
+    con el editor de ecuaciones de Word), centrada, con el resultado en
+    negrita — mismo formato que el informe técnico de referencia
+    (INFORME TECNICO OTS V&M): "sustitución = resultado"."""
+    sustitucion = sustitucion.replace(" / ", " ÷ ")
+    p = document.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    omath_para = OxmlElement("m:oMathPara")
+    omath = OxmlElement("m:oMath")
+    omath_para.append(omath)
+    p._p.append(omath_para)
+
+    for texto, negrita in ((f"{sustitucion} = ", False), (resultado, True)):
+        run = OxmlElement("m:r")
+        if negrita:
+            rpr = OxmlElement("w:rPr")
+            rpr.append(OxmlElement("w:b"))
+            run.append(rpr)
+        t = OxmlElement("m:t")
+        t.text = texto
+        run.append(t)
+        omath.append(run)
+
+
+def _add_concepto_ecuacion(document: Document, etiqueta: str, sustitucion: str, resultado: str) -> None:
+    """Par etiqueta (negrita) + ecuación nativa — la unidad de contenido
+    repetida en toda la memoria de cálculo estilo MEECSAC."""
+    p = document.add_paragraph()
+    run = p.add_run(f"{etiqueta}:")
+    run.bold = True
+    _add_ecuacion(document, sustitucion, resultado)
 
 
 def _add_title_page(document: Document, titulo: str, subtitulo: str = "") -> None:
@@ -284,15 +319,15 @@ def _add_labor_section(
 
     document.add_heading("Memoria de cálculo", level=2)
     document.add_paragraph(
-        "Desglose paso a paso (fórmula → sustitución → resultado) de cada "
-        "cifra reportada arriba."
+        "Desglose paso a paso de cada cifra reportada arriba, con la "
+        "ecuación desarrollada (fórmula aplicada, sustitución numérica y "
+        "resultado) para cada concepto."
     )
     pasos = memoria_calculo(labor, resultado)
-    _add_table(
-        document,
-        ["Concepto", "Fórmula", "Sustitución", "Resultado"],
-        [[p.concepto, p.formula, p.sustitucion, p.resultado] for p in pasos],
-    )
+    for paso in pasos:
+        _add_concepto_ecuacion(
+            document, f"{paso.concepto} ({paso.formula})", paso.sustitucion, paso.resultado
+        )
     document.add_paragraph("")
 
 

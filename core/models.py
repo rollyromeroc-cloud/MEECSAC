@@ -57,8 +57,14 @@ class LaborMinera:
     pct_explosivo_1: float = DISTRIBUCION_EXPLOSIVO_DEFAULT[0]
     pct_explosivo_2: float = DISTRIBUCION_EXPLOSIVO_DEFAULT[1]
 
-    # Aspectos técnicos / material
+    # Propiedades de la roca — elección propia, separada del criterio
+    # estándar de la OTS. alterar_por_roca decide si tipo_roca se usa solo
+    # como dato descriptivo del reporte (False, comportamiento actual) o si
+    # además debe ajustar los parámetros de perforación/voladura (True).
     tipo_roca: str = "Intermedia"
+    alterar_por_roca: bool = False
+
+    # Aspectos técnicos / material
     destino_material: str = "Desmonte"  # "Desmonte" o "Mineral"
     densidad_desmonte_tm_m3: float = DENSIDAD_DESMONTE_DEFAULT
     densidad_mineral_tm_m3: float = DENSIDAD_MINERAL_DEFAULT

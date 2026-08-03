@@ -87,6 +87,23 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
             destino = st.selectbox("Destino del material", DESTINOS_MATERIAL)
             longitud_existente = st.number_input("Longitud/altura existente (m)", value=0.0)
 
+        st.markdown("**Propiedades de la roca**")
+        c_roca1, c_roca2 = st.columns([1, 2])
+        with c_roca1:
+            tipo_roca = st.selectbox("Tipo de roca", TIPOS_ROCA, index=1)
+        with c_roca2:
+            alterar_por_roca = st.checkbox(
+                "Alterar los parámetros de perforación/voladura según el tipo de roca",
+                value=False,
+                help=(
+                    "Desmarcado (por defecto): el tipo de roca solo aparece como "
+                    "dato descriptivo en el reporte, sin afectar el cálculo — "
+                    "comportamiento actual. Marcado: los parámetros de "
+                    "'Parámetros avanzados' se ajustan según el criterio "
+                    "definido para cada tipo de roca."
+                ),
+            )
+
         st.markdown("**Programa de avance**")
         c4, c5 = st.columns(2)
         with c4:
@@ -113,7 +130,6 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                 tipo_corte = st.selectbox("Tipo de corte", TIPOS_CORTE)
             with c9:
                 taladros_alivio = st.number_input("Taladros de alivio", min_value=0, value=2, step=1)
-                tipo_roca = st.selectbox("Tipo de roca", TIPOS_ROCA, index=1)
 
             st.markdown("**Explosivos y accesorios**")
             c10, c11, c12 = st.columns(3)
@@ -179,6 +195,7 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                     pct_explosivo_1=pct_1,
                     pct_explosivo_2=pct_2,
                     tipo_roca=tipo_roca,
+                    alterar_por_roca=alterar_por_roca,
                     destino_material=destino,
                     densidad_desmonte_tm_m3=densidad_desmonte,
                     densidad_mineral_tm_m3=densidad_mineral,

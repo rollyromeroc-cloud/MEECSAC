@@ -419,6 +419,9 @@ def build_tunnel_figure_solido(
             # de cámara — de lo contrario, con el sombreado por defecto de
             # Plotly, las caras que miran hacia abajo se ven oscuras/ocultas.
             lighting=dict(ambient=1.0, diffuse=0.0, specular=0.0),
+            # contorno oscuro sobre cada arista triangulada: sin esto, el
+            # sólido se ve como un bloque uniforme sin definición de bordes.
+            contour=dict(show=True, color="#2B2B2B", width=3),
         )
     )
     # trazas invisibles solo para que la leyenda muestre el significado de

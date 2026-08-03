@@ -15,10 +15,14 @@ TIPOS_LABOR = [
     "Galería",
     "Cortada",
     "Estocada",
+    "Subnivel",
+    "Ventana",
     "Rampa",
+    "Inclinado",
     "Pique",
     "Chimenea",
     "Tajo",
+    "Tajeo",
 ]
 
 # Labores de orientación vertical/subvertical (afecta cómo se interpreta
@@ -95,10 +99,27 @@ DESCRIPCION_TIPO_LABOR = {
         "lateralmente desde una labor principal, que permiten ampliar los "
         "frentes de trabajo y el acceso a la estructura mineralizada."
     ),
+    "Subnivel": (
+        "Son labores mineras horizontales de preparación, ejecutadas entre "
+        "niveles principales con una separación vertical reducida, destinadas "
+        "a delimitar y preparar el cuerpo mineralizado como base para la "
+        "perforación y voladura en los métodos de explotación por subniveles."
+    ),
+    "Ventana": (
+        "Son labores mineras horizontales de corta longitud, ejecutadas para "
+        "conectar dos labores existentes, facilitando la ventilación, el "
+        "acceso de personal y la evacuación de material entre ellas."
+    ),
     "Rampa": (
         "Son labores mineras de desarrollo con pendiente controlada, "
         "destinadas a comunicar niveles y permitir el tránsito de equipos, "
         "personal y material entre ellos."
+    ),
+    "Inclinado": (
+        "Son labores mineras desarrolladas con una inclinación pronunciada y "
+        "constante siguiendo la estructura mineralizada, destinadas a "
+        "comunicar niveles y facilitar el transporte de mineral, desmonte, "
+        "personal y materiales mediante sistemas de izaje o rieles."
     ),
     "Pique": (
         "Son labores mineras de desarrollo vertical o subvertical destinadas "
@@ -114,6 +135,11 @@ DESCRIPCION_TIPO_LABOR = {
     "Tajo": (
         "Es la labor minera de explotación mediante la cual se extrae el "
         "mineral económicamente explotable del yacimiento."
+    ),
+    "Tajeo": (
+        "Es la labor minera de explotación subterránea mediante la cual se "
+        "extrae el mineral económicamente explotable siguiendo la geometría "
+        "del cuerpo mineralizado, según el método de explotación adoptado."
     ),
 }
 
@@ -131,10 +157,14 @@ PROPOSITO_TIPO_LABOR = {
         "recuperación del mineral económicamente explotable"
     ),
     "Estocada": "permitiendo ampliar los frentes de trabajo y el acceso a la estructura mineralizada",
+    "Subnivel": "permitiendo delimitar y preparar el cuerpo mineralizado para su posterior explotación por subniveles",
+    "Ventana": "facilitando la ventilación, el acceso de personal y la evacuación de material entre las labores conectadas",
     "Rampa": "permitiendo el tránsito de equipos y personal entre niveles",
+    "Inclinado": "permitiendo la comunicación entre niveles y el transporte de mineral, desmonte, personal y materiales siguiendo la estructura mineralizada",
     "Pique": "contribuyendo a mejorar la comunicación entre niveles y la operatividad de la mina",
     "Chimenea": "destinada a mejorar la ventilación, la comunicación y la seguridad operacional",
     "Tajo": "permitiendo la extracción del mineral económicamente explotable",
+    "Tajeo": "permitiendo la extracción del mineral económicamente explotable según el método de explotación adoptado",
 }
 
 ACTIVIDADES_CICLICAS = [
