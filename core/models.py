@@ -70,6 +70,11 @@ class LaborMinera:
     # (True) — ver core.voladura.taladros_desde_roca. distancia_taladros_m
     # es "dt" en esa fórmula; None = usar el punto medio del rango de la
     # roca seleccionada (ver DISTANCIA_TALADROS_RANGO_M).
+    #
+    # OJO: esta fórmula es una estimación empírica genérica, NO el criterio
+    # real de campo de la OTS — según el informe técnico de referencia
+    # (INFORME TECNICO 180TN), la OTS diseña sus mallas de perforación con
+    # criterio propio caso por caso, no con una fórmula universal.
     tipo_roca: str = "Media"
     alterar_por_roca: bool = False
     distancia_taladros_m: Optional[float] = None

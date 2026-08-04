@@ -84,15 +84,21 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
         tipo_roca = st.selectbox("Tipo de roca", TIPOS_ROCA, index=1, key="tipo_roca_nueva_labor")
     with c_roca2:
         alterar_por_roca = st.checkbox(
-            "Alterar los parámetros de perforación/voladura según el tipo de roca",
+            "Alterar los parámetros de perforación/voladura según el tipo de roca "
+            "(estimación general, no es el criterio de campo de la OTS)",
             value=False,
             key="alterar_por_roca_nueva_labor",
             help=(
                 "Desmarcado (por defecto): el tipo de roca solo aparece como "
                 "dato descriptivo en el reporte, sin afectar el cálculo — "
                 "comportamiento actual. Marcado: N.° de taladros se calcula "
-                "como (Perímetro / dt) + (Coeficiente de roca × Área) en vez "
-                "de pedirse manualmente."
+                "como (Perímetro / dt) + (Coeficiente de roca × Área), una "
+                "fórmula empírica de referencia genérica. Ojo: la OTS reporta "
+                "explícitamente que en la práctica NO usa fórmulas genéricas "
+                "de este tipo, sino mallas de perforación fijas por tamaño de "
+                "sección definidas con criterio propio a partir de la "
+                "experiencia de campo — usa esto solo como una estimación "
+                "preliminar, no como el número que reportaría la OTS."
             ),
         )
     distancia_taladros = None

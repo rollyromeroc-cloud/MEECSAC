@@ -62,7 +62,9 @@ def test_memoria_calculo_incluye_paso_de_taladros_cuando_se_altera_por_roca():
     pasos = memoria_calculo(labor, resultado)
     por_concepto = {p.concepto: p for p in pasos}
 
-    paso_taladros = por_concepto["N.° de taladros (criterio de roca dura)"]
+    paso_taladros = por_concepto[
+        "N.° de taladros (estimación empírica según roca dura, no es el criterio de campo de la OTS)"
+    ]
     assert "÷" not in paso_taladros.sustitucion  # solo la memoria de docx convierte "/" a "÷"
     assert "0.375" in paso_taladros.sustitucion
     assert "2.0" in paso_taladros.sustitucion
