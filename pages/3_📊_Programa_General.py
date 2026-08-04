@@ -7,6 +7,7 @@ import plotly.express as px
 import streamlit as st
 
 from auth import require_login
+from core.constants import ORDEN_ETAPAS
 from core.models import LaborMinera, Polvorin, PuntoRiesgo
 from core.voladura import calcular_programa
 
@@ -55,8 +56,7 @@ if labores:
         ]
     )
 
-    orden_etapas = ["Desarrollo", "Preparación", "Explotación"]
-    df["Etapa"] = pd.Categorical(df["Etapa"], categories=orden_etapas, ordered=True)
+    df["Etapa"] = pd.Categorical(df["Etapa"], categories=ORDEN_ETAPAS, ordered=True)
     df = df.sort_values(["Etapa", "Labor"])
     df["Avance acumulado (m)"] = df["Avance (m)"].cumsum()
     df["Tonelaje acumulado (TM)"] = df["Tonelaje (TM)"].cumsum()

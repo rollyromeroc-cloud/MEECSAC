@@ -106,6 +106,11 @@ def parrafos_introduccion(
 
 
 _INTRO_ETAPA = {
+    "Exploración": (
+        "En esta etapa se ejecutan las labores de exploración, orientadas al "
+        "reconocimiento del yacimiento; el material removido corresponde "
+        "predominantemente a desmonte, con una proporción menor de mineral."
+    ),
     "Desarrollo": (
         "En esta etapa se ejecutan las labores de desarrollo, las cuales "
         "permiten el acceso al cuerpo mineralizado, la comunicación entre "

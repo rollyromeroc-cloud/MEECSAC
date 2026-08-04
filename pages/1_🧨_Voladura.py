@@ -10,11 +10,13 @@ from auth import require_login
 LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_meecsac.jpg"
 from core.constants import (
     COEFICIENTE_ROCA,
+    DESTINO_PREDOMINANTE_POR_ETAPA,
     DESTINOS_MATERIAL,
     DISTANCIA_TALADROS_RANGO_M,
     EQUIPOS_PERFORACION,
     FORMAS_SECCION,
     LABORES_VERTICALES,
+    ORDEN_ETAPAS,
     TIPOS_CORTE,
     TIPOS_EXPLOSIVO_DEFAULT,
     TIPOS_LABOR,
@@ -116,7 +118,7 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
         with c1:
             nombre = st.text_input("Nombre de la labor", placeholder="Ej. Galería Nivel 2")
             tipo = st.selectbox("Tipo de labor", TIPOS_LABOR)
-            etapa = st.selectbox("Etapa", ["Desarrollo", "Preparación", "Explotación"])
+            etapa = st.selectbox("Etapa", ORDEN_ETAPAS)
         with c2:
             ancho = st.number_input("Ancho de sección (m)", min_value=0.0, value=1.77, step=0.01)
             alto = st.number_input("Alto de sección (m)", min_value=0.0, value=1.10, step=0.01)
@@ -125,7 +127,14 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                 help="Solo aplica a labores horizontales — Pique y Chimenea siempre usan sección circular vertical.",
             )
         with c3:
-            destino = st.selectbox("Destino del material", DESTINOS_MATERIAL)
+            destino = st.selectbox(
+                "Destino del material", DESTINOS_MATERIAL,
+                help=(
+                    "Material predominante según la etapa (guía referencial, la "
+                    "elección sigue siendo manual): "
+                    + " · ".join(f"{e}: {d}" for e, d in DESTINO_PREDOMINANTE_POR_ETAPA.items())
+                ),
+            )
             longitud_existente = st.number_input("Longitud/altura existente (m)", value=0.0)
 
         es_avance_mensual = modo_programa == "Avance mensual (6 meses)"

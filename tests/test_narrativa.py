@@ -43,6 +43,21 @@ def test_programa_actividades_agrupa_por_etapa_en_orden():
         assert len(bullets) == 1
 
 
+def test_programa_actividades_incluye_exploracion_primero():
+    labores = _labores_ejemplo() + [
+        LaborMinera(
+            nombre="Chimenea Exploratoria", tipo="Chimenea", etapa="Exploración",
+            ancho_m=1.20, alto_m=1.20, avance_proyectado_m=20.0,
+        ),
+    ]
+    resultados = calcular_programa(labores)
+    secciones = programa_actividades(labores, resultados)
+    etapas = [s[0] for s in secciones]
+    assert etapas == ["Exploración", "Desarrollo", "Preparación", "Explotación"]
+    intro_exploracion = next(intro for etapa, intro, _ in secciones if etapa == "Exploración")
+    assert intro_exploracion  # tiene texto introductorio propio, no queda vacío
+
+
 def test_secuencia_operativa_incluye_totales():
     labores = _labores_ejemplo()
     resultados = calcular_programa(labores)

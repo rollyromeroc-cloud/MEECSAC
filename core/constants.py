@@ -184,7 +184,19 @@ ACTIVIDADES_CICLICAS = [
     "Transporte",
 ]
 
-ORDEN_ETAPAS = ["Desarrollo", "Preparación", "Explotación"]
+ORDEN_ETAPAS = ["Exploración", "Desarrollo", "Preparación", "Explotación"]
+
+# Guía de destino del material predominante por etapa (referencial, no
+# fuerza el valor — el destino sigue siendo elección manual por labor):
+# en Exploración predomina desmonte sobre mineral, en Desarrollo y
+# Preparación es prácticamente solo desmonte, y en Explotación predomina
+# mineral sobre desmonte.
+DESTINO_PREDOMINANTE_POR_ETAPA = {
+    "Exploración": "Desmonte (con algo de mineral)",
+    "Desarrollo": "Desmonte",
+    "Preparación": "Desmonte",
+    "Explotación": "Mineral (con algo de desmonte)",
+}
 
 # Capacidad maxima por guia de remision segun SUCAMEC, por tipo generico de
 # explosivo/accesorio (no por marca comercial). Valores de referencia; ante
