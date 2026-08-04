@@ -15,6 +15,7 @@ from core.geometry import (
     perfil_herradura,
     perfil_herradura_pura,
     perfil_trapezoidal,
+    perimetro_seccion,
     relacion_aspecto,
 )
 
@@ -264,3 +265,48 @@ def test_anillos_de_avance_mensual_pique_extruye_en_z():
         # el radio del anillo debe coincidir con el diametro dado
         assert np.hypot(anillo[0, 0], anillo[0, 1]) == pytest.approx(1.5)
         assert (anillo[0] == anillo[-1]).all()
+
+
+def test_anillos_de_avance_mensual_no_uniforme_respeta_valores_reales():
+    programa = [0.3, 0.3, 0.5, 0.5, 1.0, 1.0]  # total 3.6, no uniforme
+    anillos = anillos_de_avance_mensual(
+        ancho=1.77, alto=1.10, longitud_existente=9.0, avance_proyectado=0.0,
+        n_meses=0, avance_mensual=programa,
+    )
+    assert len(anillos) == 6
+    acumulado = 9.0
+    for valor, anillo in zip(programa, anillos):
+        acumulado += valor
+        assert anillo[0, 0] == pytest.approx(acumulado)
+    assert anillos[-1][0, 0] == pytest.approx(9.0 + sum(programa))
+
+
+def test_anillos_de_avance_mensual_pique_no_uniforme_respeta_valores_reales():
+    programa = [0.3, 0.5, 0.5, 0.5, 1.0, 0.0]
+    anillos = anillos_de_avance_mensual_pique(
+        diametro=3.0, longitud_existente=0.0, avance_proyectado=0.0,
+        n_meses=0, avance_mensual=programa,
+    )
+    assert len(anillos) == 6
+    acumulado = 0.0
+    for valor, anillo in zip(programa, anillos):
+        acumulado += valor
+        assert anillo[0, 2] == pytest.approx(acumulado)
+
+
+def test_perimetro_seccion_circular_coincide_con_formula_geometrica():
+    # perimetro_seccion discretiza el círculo en n_arco cuerdas (no el círculo
+    # exacto), así que se compara contra el perímetro exacto del polígono
+    # inscrito de n_arco lados — no contra pi*diametro (tiene ~0.3% de error
+    # de discretización con n_arco=24, esperado, no un bug).
+    diametro, n_arco = 3.0, 24
+    p = perimetro_seccion("Circular", diametro, diametro, n_arco=n_arco)
+    perimetro_poligono_inscrito = n_arco * diametro * np.sin(np.pi / n_arco)
+    assert p == pytest.approx(perimetro_poligono_inscrito, rel=1e-9)
+    # y sigue siendo una aproximación razonable de pi*diametro
+    assert p == pytest.approx(np.pi * diametro, rel=5e-3)
+
+
+def test_perimetro_seccion_positivo_para_todas_las_formas():
+    for forma in FORMAS_SECCION:
+        assert perimetro_seccion(forma, 1.77, 1.10) > 0

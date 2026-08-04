@@ -37,7 +37,22 @@ FORMAS_SECCION = [
     "Circular",
 ]
 
-TIPOS_ROCA = ["Suave", "Intermedia", "Dura", "Muy dura"]
+TIPOS_ROCA = ["Suave", "Media", "Dura"]
+
+# Diseño de malla de perforación por tipo de roca — N.° T = (P / dt) + (C × S),
+# donde P = perímetro de la sección (m), S = área de la sección (m²), dt =
+# distancia entre taladros (m) y C = coeficiente de roca. Rango de dt en
+# metros (se usa el punto medio como valor por defecto editable).
+DISTANCIA_TALADROS_RANGO_M = {
+    "Dura": (0.35, 0.40),
+    "Media": (0.45, 0.50),
+    "Suave": (0.55, 0.60),
+}
+COEFICIENTE_ROCA = {
+    "Dura": 2.0,
+    "Media": 1.5,
+    "Suave": 1.0,
+}
 
 # Peso específico típico (TM/m³) — referencial, editable por labor.
 DENSIDAD_DESMONTE_DEFAULT = 2.70

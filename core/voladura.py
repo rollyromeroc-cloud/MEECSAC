@@ -31,6 +31,16 @@ def avance_desde_produccion_objetivo(
     return produccion_objetivo_tm / (area_m2 * densidad_tm_m3)
 
 
+def taladros_desde_roca(
+    perimetro_m: float, area_m2: float, distancia_taladros_m: float, coeficiente_roca: float
+) -> int:
+    """N.° de taladros según el criterio de diseño de malla de perforación
+    por tipo de roca: N.° T = (Perímetro / dt) + (Coeficiente de roca × Área)."""
+    if distancia_taladros_m <= 0:
+        return 0
+    return round(perimetro_m / distancia_taladros_m + coeficiente_roca * area_m2)
+
+
 def calcular_resultado(labor: LaborMinera) -> ResultadoVoladura:
     area_m2 = labor.ancho_m * labor.alto_m
 

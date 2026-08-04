@@ -9,7 +9,9 @@ from auth import require_login
 
 LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_meecsac.jpg"
 from core.constants import (
+    COEFICIENTE_ROCA,
     DESTINOS_MATERIAL,
+    DISTANCIA_TALADROS_RANGO_M,
     EQUIPOS_PERFORACION,
     FORMAS_SECCION,
     LABORES_VERTICALES,
@@ -18,7 +20,7 @@ from core.constants import (
     TIPOS_LABOR,
     TIPOS_ROCA,
 )
-from core.geometry import malla_solida_pique, malla_solida_tunel
+from core.geometry import malla_solida_pique, malla_solida_tunel, perimetro_seccion
 from core.georef import (
     calcular_rumbo_pendiente,
     matriz_rotacion,
@@ -31,6 +33,7 @@ from core.voladura import (
     avance_desde_n_disparos,
     avance_desde_produccion_objetivo,
     calcular_programa,
+    taladros_desde_roca,
 )
 from reports.docx_builder import build_voladura_report
 from reports.dxf_export import construir_dxf_labor
@@ -62,14 +65,46 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
     )
     modo_programa = st.selectbox(
         "Dato de programa que ya tienes",
-        ["Longitud programada (m)", "N.° de disparos programado", "Producción objetivo (TM)"],
+        [
+            "Longitud programada (m)", "N.° de disparos programado",
+            "Producción objetivo (TM)", "Avance mensual (6 meses)",
+        ],
         key="modo_programa_nueva_labor",
         help=(
-            "Elige el dato que ya conoces del plan mensual; el resto (longitud "
+            "Elige el dato que ya conoces del plan; el resto (longitud "
             "programada, N.° de disparos o producción, según corresponda) se "
-            "calcula automáticamente con el mismo criterio de la OTS."
+            "calcula automáticamente con el mismo criterio de la OTS. Con "
+            "'Avance mensual' se ingresa directamente lo programado mes a mes."
         ),
     )
+
+    st.markdown("**Propiedades de la roca**")
+    c_roca1, c_roca2 = st.columns([1, 2])
+    with c_roca1:
+        tipo_roca = st.selectbox("Tipo de roca", TIPOS_ROCA, index=1, key="tipo_roca_nueva_labor")
+    with c_roca2:
+        alterar_por_roca = st.checkbox(
+            "Alterar los parámetros de perforación/voladura según el tipo de roca",
+            value=False,
+            key="alterar_por_roca_nueva_labor",
+            help=(
+                "Desmarcado (por defecto): el tipo de roca solo aparece como "
+                "dato descriptivo en el reporte, sin afectar el cálculo — "
+                "comportamiento actual. Marcado: N.° de taladros se calcula "
+                "como (Perímetro / dt) + (Coeficiente de roca × Área) en vez "
+                "de pedirse manualmente."
+            ),
+        )
+    distancia_taladros = None
+    if alterar_por_roca:
+        rango_dt = DISTANCIA_TALADROS_RANGO_M.get(tipo_roca, (0.0, 0.0))
+        distancia_taladros = st.number_input(
+            "Distancia entre taladros — dt (m)",
+            min_value=0.01, value=round(sum(rango_dt) / 2.0, 3), step=0.005, format="%.3f",
+            key=f"dt_nueva_labor_{tipo_roca}",
+            help=f"Rango típico para roca {tipo_roca.lower()}: {rango_dt[0]}–{rango_dt[1]} m. Editable.",
+        )
+
     with st.form("form_labor", clear_on_submit=True):
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -87,37 +122,38 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
             destino = st.selectbox("Destino del material", DESTINOS_MATERIAL)
             longitud_existente = st.number_input("Longitud/altura existente (m)", value=0.0)
 
-        st.markdown("**Propiedades de la roca**")
-        c_roca1, c_roca2 = st.columns([1, 2])
-        with c_roca1:
-            tipo_roca = st.selectbox("Tipo de roca", TIPOS_ROCA, index=1)
-        with c_roca2:
-            alterar_por_roca = st.checkbox(
-                "Alterar los parámetros de perforación/voladura según el tipo de roca",
-                value=False,
-                help=(
-                    "Desmarcado (por defecto): el tipo de roca solo aparece como "
-                    "dato descriptivo en el reporte, sin afectar el cálculo — "
-                    "comportamiento actual. Marcado: los parámetros de "
-                    "'Parámetros avanzados' se ajustan según el criterio "
-                    "definido para cada tipo de roca."
-                ),
-            )
-
+        es_avance_mensual = modo_programa == "Avance mensual (6 meses)"
         st.markdown("**Programa de avance**")
         c4, c5 = st.columns(2)
         with c4:
-            avance_por_disparo = st.number_input("Avance x disparo (m)", value=1.10)
+            avance_por_disparo = st.number_input(
+                "Avance x disparo (m)", value=None if es_avance_mensual else 1.10,
+                placeholder="Opcional si no se conoce" if es_avance_mensual else None,
+            )
         with c5:
-            taladros_cargados = st.number_input("N.° taladros x disparo", min_value=0, value=23, step=1)
+            taladros_label = "N.° taladros x disparo"
+            if alterar_por_roca:
+                taladros_label += " (se recalcula según la roca)"
+            taladros_cargados = st.number_input(
+                taladros_label, min_value=0, value=None if es_avance_mensual else 23, step=1,
+                placeholder="Opcional si no se conoce" if es_avance_mensual else None,
+            )
 
         avance_proyectado_input = n_disparos_input = produccion_objetivo_input = None
+        avance_mensual_input: list[float] | None = None
         if modo_programa == "Longitud programada (m)":
             avance_proyectado_input = st.number_input("Longitud programada (m)", value=66.0)
         elif modo_programa == "N.° de disparos programado":
             n_disparos_input = st.number_input("N.° de disparos programado", min_value=0, value=60, step=1)
-        else:
+        elif modo_programa == "Producción objetivo (TM)":
             produccion_objetivo_input = st.number_input("Producción objetivo (TM)", min_value=0.0, value=346.96)
+        else:
+            st.caption("Avance programado por mes (m) — se suman para la longitud total.")
+            cols_meses = st.columns(6)
+            avance_mensual_input = [
+                cols_meses[i].number_input(f"Mes {i + 1}", min_value=0.0, value=0.0, step=0.1, key=f"mes_{i + 1}")
+                for i in range(6)
+            ]
 
         with st.expander("Parámetros avanzados (criterio OTS)", icon=":material/tune:"):
             st.markdown("**Diseño de perforación**")
@@ -159,19 +195,33 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                 st.error("Ingresa un nombre para la labor.")
             elif abs(pct_1 + pct_2 - 100.0) > 0.01:
                 st.error("Los porcentajes de explosivo deben sumar 100%.")
-            elif modo_programa == "N.° de disparos programado" and avance_por_disparo <= 0:
+            elif modo_programa == "N.° de disparos programado" and (avance_por_disparo or 0) <= 0:
                 st.error("El avance x disparo debe ser mayor a 0 para calcular la longitud a partir del N.° de disparos.")
             elif modo_programa == "Producción objetivo (TM)" and (ancho * alto <= 0 or densidad_usada <= 0):
                 st.error("La sección (ancho × alto) y la densidad deben ser mayores a 0 para calcular la longitud a partir de la producción objetivo.")
+            elif alterar_por_roca and (not distancia_taladros or distancia_taladros <= 0):
+                st.error("La distancia entre taladros (dt) debe ser mayor a 0 para calcular el N.° de taladros según la roca.")
             else:
+                avance_mensual_final = None
                 if modo_programa == "Longitud programada (m)":
                     avance_proyectado = avance_proyectado_input
                 elif modo_programa == "N.° de disparos programado":
                     avance_proyectado = avance_desde_n_disparos(int(n_disparos_input), avance_por_disparo)
-                else:
+                elif modo_programa == "Producción objetivo (TM)":
                     avance_proyectado = avance_desde_produccion_objetivo(
                         produccion_objetivo_input, ancho, alto, densidad_usada
                     )
+                else:
+                    avance_mensual_final = list(avance_mensual_input)
+                    avance_proyectado = sum(avance_mensual_final)
+
+                avance_por_disparo_final = avance_por_disparo if avance_por_disparo is not None else 0.0
+                taladros_final = int(taladros_cargados) if taladros_cargados is not None else 0
+                if alterar_por_roca:
+                    perimetro = perimetro_seccion(forma_seccion, ancho, alto)
+                    coeficiente = COEFICIENTE_ROCA.get(tipo_roca, 0.0)
+                    taladros_final = taladros_desde_roca(perimetro, ancho * alto, distancia_taladros, coeficiente)
+
                 labor = LaborMinera(
                     nombre=nombre,
                     tipo=tipo,
@@ -181,12 +231,13 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                     forma_seccion=forma_seccion,
                     longitud_existente_m=longitud_existente,
                     avance_proyectado_m=avance_proyectado,
-                    avance_por_disparo_m=avance_por_disparo,
+                    avance_por_disparo_m=avance_por_disparo_final,
+                    avance_mensual_m=avance_mensual_final,
                     diametro_barreno_mm=diametro_barreno,
                     longitud_barreno_pies=longitud_barreno,
                     tipo_corte=tipo_corte,
                     equipo_perforacion=equipo,
-                    taladros_cargados=int(taladros_cargados),
+                    taladros_cargados=taladros_final,
                     taladros_alivio=int(taladros_alivio),
                     cartuchos_por_taladro=int(cartuchos_por_taladro),
                     peso_cartucho_kg=peso_cartucho,
@@ -196,6 +247,7 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                     pct_explosivo_2=pct_2,
                     tipo_roca=tipo_roca,
                     alterar_por_roca=alterar_por_roca,
+                    distancia_taladros_m=distancia_taladros if alterar_por_roca else None,
                     destino_material=destino,
                     densidad_desmonte_tm_m3=densidad_desmonte,
                     densidad_mineral_tm_m3=densidad_mineral,

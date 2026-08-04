@@ -40,6 +40,12 @@ class LaborMinera:
     longitud_existente_m: float = 0.0
     avance_proyectado_m: float = 0.0
     avance_por_disparo_m: float = 1.10
+    # Avance mes a mes (6 valores, m) cuando se ingresa así en vez de
+    # longitud/N.° de disparos/producción — avance_proyectado_m ya viene
+    # resuelto como la suma de estos valores; se conservan aquí para poder
+    # dibujar los anillos de avance mensual con la programación real (no
+    # uniforme) en el esquema sólido.
+    avance_mensual_m: Optional[list[float]] = None
 
     # Diseño de perforación
     diametro_barreno_mm: float = DIAMETRO_BARRENO_DEFAULT_MM
@@ -60,9 +66,13 @@ class LaborMinera:
     # Propiedades de la roca — elección propia, separada del criterio
     # estándar de la OTS. alterar_por_roca decide si tipo_roca se usa solo
     # como dato descriptivo del reporte (False, comportamiento actual) o si
-    # además debe ajustar los parámetros de perforación/voladura (True).
-    tipo_roca: str = "Intermedia"
+    # además debe recalcular taladros_cargados según N.° T = (P/dt) + (C×S)
+    # (True) — ver core.voladura.taladros_desde_roca. distancia_taladros_m
+    # es "dt" en esa fórmula; None = usar el punto medio del rango de la
+    # roca seleccionada (ver DISTANCIA_TALADROS_RANGO_M).
+    tipo_roca: str = "Media"
     alterar_por_roca: bool = False
+    distancia_taladros_m: Optional[float] = None
 
     # Aspectos técnicos / material
     destino_material: str = "Desmonte"  # "Desmonte" o "Mineral"

@@ -8,6 +8,7 @@ from core.voladura import (
     avance_desde_n_disparos,
     avance_desde_produccion_objetivo,
     calcular_resultado,
+    taladros_desde_roca,
 )
 
 
@@ -119,3 +120,12 @@ def test_avance_desde_produccion_objetivo_coincide_con_galeria_nivel_2():
 def test_avance_desde_produccion_objetivo_area_o_densidad_invalida_devuelve_cero():
     assert avance_desde_produccion_objetivo(100.0, 0.0, 1.10, 2.70) == 0.0
     assert avance_desde_produccion_objetivo(100.0, 1.77, 1.10, 0.0) == 0.0
+
+
+def test_taladros_desde_roca_formula():
+    # N.° T = (P/dt) + (C×S) -> (14.00/0.375) + (1.5×10.78) = 37.33 + 16.17 = 53.5 -> 54
+    assert taladros_desde_roca(14.00, 10.78, 0.375, 1.5) == 54
+
+
+def test_taladros_desde_roca_distancia_invalida_devuelve_cero():
+    assert taladros_desde_roca(14.00, 10.78, 0.0, 1.5) == 0

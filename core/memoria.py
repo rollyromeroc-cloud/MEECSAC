@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.constants import PIE_A_METROS
+from core.constants import COEFICIENTE_ROCA, DISTANCIA_TALADROS_RANGO_M, PIE_A_METROS
+from core.geometry import perimetro_seccion
 from core.models import LaborMinera, ResultadoVoladura
 
 
@@ -146,4 +147,20 @@ def memoria_calculo(labor: LaborMinera, resultado: ResultadoVoladura) -> list[Pa
             f"{_n(resultado.mecha_total_m)} m",
         ),
     ]
+
+    if labor.alterar_por_roca:
+        rango = DISTANCIA_TALADROS_RANGO_M.get(labor.tipo_roca)
+        dt = labor.distancia_taladros_m or (sum(rango) / 2.0 if rango else 0.0)
+        coeficiente = COEFICIENTE_ROCA.get(labor.tipo_roca, 0.0)
+        perimetro = perimetro_seccion(labor.forma_seccion, labor.ancho_m, labor.alto_m)
+        pasos.insert(
+            3,
+            PasoCalculo(
+                f"N.° de taladros (criterio de roca {labor.tipo_roca.lower()})",
+                "(Perímetro / dt) + (Coeficiente de roca × Área)",
+                f"({_n(perimetro)} / {_n(dt, 3)}) + ({coeficiente:.1f} × {_n(resultado.area_m2, 3)})",
+                f"{labor.taladros_cargados} unidades",
+            ),
+        )
+
     return pasos

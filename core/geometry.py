@@ -90,6 +90,15 @@ def _perfil_por_forma(forma: str | None, ancho: float, alto: float, n_arco: int)
     return perfil_herradura(ancho, alto, n_arco=n_arco)
 
 
+def perimetro_seccion(forma: str | None, ancho: float, alto: float, n_arco: int = 24) -> float:
+    """Perímetro (m) del contorno de la sección transversal — usado en el
+    diseño de malla de perforación, N.° T = (Perímetro / dt) + (Coef. roca ×
+    Área), ver `core.voladura.taladros_desde_roca`."""
+    perfil_cerrado = _cerrar_anillo(_perfil_por_forma(forma, ancho, alto, n_arco))
+    segmentos = np.diff(perfil_cerrado, axis=0)
+    return float(np.sum(np.hypot(segmentos[:, 0], segmentos[:, 1])))
+
+
 def _cerrar_anillo(anillo: np.ndarray) -> np.ndarray:
     """Repite el primer punto al final para que, al dibujarse como línea,
     el anillo quede cerrado (incluye el piso — la arista que conecta
@@ -167,46 +176,61 @@ def malla_tunel_pique(
     return {"anillos": anillos, "longitudinales": longitudinales, "perfil": perfil}
 
 
+def _posiciones_mensuales(
+    longitud_existente: float, avance_proyectado: float, n_meses: int,
+    avance_mensual: list[float] | None,
+) -> np.ndarray:
+    """Posiciones acumuladas (a lo largo del eje de extrusión) de cada
+    anillo mensual. Si se pasa `avance_mensual` (una cifra de avance real
+    por mes, no necesariamente uniforme — p. ej. un programa [0.3, 0.3,
+    0.5, 0.5, 1.0, 1.0]), se usan esas cifras tal cual; si no, se asume
+    avance uniforme (avance_proyectado / n_meses por mes)."""
+    if avance_mensual:
+        return longitud_existente + np.cumsum(avance_mensual)
+    if n_meses <= 0 or avance_proyectado <= 0:
+        return np.array([])
+    avance_mes = avance_proyectado / n_meses
+    return longitud_existente + np.arange(1, n_meses + 1) * avance_mes
+
+
 def anillos_de_avance_mensual(
     ancho: float, alto: float, longitud_existente: float, avance_proyectado: float,
     n_meses: int, forma: str | None = None, n_arco: int = 24,
+    avance_mensual: list[float] | None = None,
 ) -> list[np.ndarray]:
-    """Un anillo cerrado (ver `_cerrar_anillo`) por cada mes de
-    `avance_proyectado`, asumiendo avance uniforme (avance_proyectado /
-    n_meses por mes) — para marcar la programación mensual sobre el
-    esquema. Los anillos quedan en x = longitud_existente + k * avance
-    mensual, k = 1..n_meses (el último coincide con el final del avance
-    proyectado). Devuelve lista vacía si no hay avance proyectado o meses
-    que marcar."""
-    if n_meses <= 0 or avance_proyectado <= 0:
+    """Un anillo cerrado (ver `_cerrar_anillo`) por cada mes de programa —
+    para marcar la programación mensual sobre el esquema. Por defecto
+    asume avance uniforme (avance_proyectado / n_meses por mes); si se pasa
+    `avance_mensual` (una cifra de avance real por cada mes, no
+    necesariamente uniforme), se usan esas posiciones acumuladas reales en
+    su lugar. Los anillos quedan en x = longitud_existente + avance
+    acumulado (el último coincide con el final del avance proyectado).
+    Devuelve lista vacía si no hay avance ni meses que marcar."""
+    posiciones = _posiciones_mensuales(longitud_existente, avance_proyectado, n_meses, avance_mensual)
+    if len(posiciones) == 0:
         return []
     perfil = _perfil_por_forma(forma, ancho, alto, n_arco)
-    avance_mensual = avance_proyectado / n_meses
     return [
-        _cerrar_anillo(np.column_stack([
-            np.full(len(perfil), longitud_existente + k * avance_mensual),
-            perfil[:, 0], perfil[:, 1],
-        ]))
-        for k in range(1, n_meses + 1)
+        _cerrar_anillo(np.column_stack([np.full(len(perfil), x), perfil[:, 0], perfil[:, 1]]))
+        for x in posiciones
     ]
 
 
 def anillos_de_avance_mensual_pique(
     diametro: float, longitud_existente: float, avance_proyectado: float,
-    n_meses: int, n_arco: int = 24,
+    n_meses: int, n_arco: int = 24, avance_mensual: list[float] | None = None,
 ) -> list[np.ndarray]:
     """Análogo de `anillos_de_avance_mensual` para Pique/Chimenea (eje
     local Z en vez de X)."""
-    if n_meses <= 0 or avance_proyectado <= 0:
+    posiciones = _posiciones_mensuales(longitud_existente, avance_proyectado, n_meses, avance_mensual)
+    if len(posiciones) == 0:
         return []
     perfil = perfil_circular(diametro, n_arco=n_arco)
-    avance_mensual = avance_proyectado / n_meses
     return [
         _cerrar_anillo(np.column_stack([
-            perfil[:, 0], perfil[:, 1],
-            np.full(len(perfil), longitud_existente + k * avance_mensual),
+            perfil[:, 0], perfil[:, 1], np.full(len(perfil), z),
         ]))
-        for k in range(1, n_meses + 1)
+        for z in posiciones
     ]
 
 

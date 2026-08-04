@@ -438,17 +438,22 @@ def build_tunnel_figure_solido(
                 )
             )
 
-    if n_meses:
+    # si la labor tiene un programa mensual real (ingresado mes a mes, no
+    # necesariamente uniforme), se usa tal cual en vez de asumir avance
+    # uniforme sobre datos.periodo_meses.
+    n_meses_efectivo = len(labor.avance_mensual_m) if labor.avance_mensual_m else n_meses
+    if n_meses_efectivo:
         radio = labor.ancho_m / 2.0
         if vertical:
             anillos_mes = anillos_de_avance_mensual_pique(
-                labor.ancho_m, longitud_existente, avance_proyectado, n_meses,
+                labor.ancho_m, longitud_existente, avance_proyectado, n_meses_efectivo,
+                avance_mensual=labor.avance_mensual_m,
             )
             offset_etiqueta = radio * 1.35
         else:
             anillos_mes = anillos_de_avance_mensual(
-                labor.ancho_m, labor.alto_m, longitud_existente, avance_proyectado, n_meses,
-                forma=labor.forma_seccion,
+                labor.ancho_m, labor.alto_m, longitud_existente, avance_proyectado, n_meses_efectivo,
+                forma=labor.forma_seccion, avance_mensual=labor.avance_mensual_m,
             )
             offset_etiqueta = labor.alto_m + max(0.5, 0.08 * longitud_total) * 0.6
         _agregar_anillos_avance_mensual(fig, anillos_mes, vertical, offset_etiqueta)
