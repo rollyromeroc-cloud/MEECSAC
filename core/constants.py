@@ -21,7 +21,6 @@ TIPOS_LABOR = [
     "Inclinado",
     "Pique",
     "Chimenea",
-    "Tajo",
     "Tajeo",
 ]
 
@@ -132,10 +131,6 @@ DESCRIPCION_TIPO_LABOR = {
         "a mejorar la ventilación, la comunicación entre niveles y la "
         "seguridad operacional de la unidad minera."
     ),
-    "Tajo": (
-        "Es la labor minera de explotación mediante la cual se extrae el "
-        "mineral económicamente explotable del yacimiento."
-    ),
     "Tajeo": (
         "Es la labor minera de explotación subterránea mediante la cual se "
         "extrae el mineral económicamente explotable siguiendo la geometría "
@@ -163,7 +158,6 @@ PROPOSITO_TIPO_LABOR = {
     "Inclinado": "permitiendo la comunicación entre niveles y el transporte de mineral, desmonte, personal y materiales siguiendo la estructura mineralizada",
     "Pique": "contribuyendo a mejorar la comunicación entre niveles y la operatividad de la mina",
     "Chimenea": "destinada a mejorar la ventilación, la comunicación y la seguridad operacional",
-    "Tajo": "permitiendo la extracción del mineral económicamente explotable",
     "Tajeo": "permitiendo la extracción del mineral económicamente explotable según el método de explotación adoptado",
 }
 
