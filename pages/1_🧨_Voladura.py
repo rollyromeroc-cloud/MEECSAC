@@ -41,6 +41,7 @@ from core.voladura import (
 )
 from reports.docx_builder import build_voladura_report
 from reports.dxf_export import construir_dxf_labor
+from viz.malla_plot import build_malla_perforacion_figure
 from viz.tunnel_plot import build_tunnel_figure, build_tunnel_figure_solido
 
 st.set_page_config(page_title="Voladura", page_icon=str(LOGO_PATH), layout="wide")
@@ -183,6 +184,16 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                 tipo_corte = st.selectbox("Tipo de corte", TIPOS_CORTE)
             with c9:
                 taladros_alivio = st.number_input("Taladros de alivio", min_value=0, value=2, step=1)
+                diametro_alivio = st.number_input(
+                    "Diámetro de alivio (mm)", min_value=0.0, value=None,
+                    placeholder="= diámetro de barreno",
+                    help=(
+                        "Diámetro de los taladros de alivio, si se perforan con una "
+                        "broca distinta a la de los taladros cargados — usado para "
+                        "calcular el burden del corte en la malla de perforación "
+                        "(ver más abajo). Vacío = usar el mismo diámetro de barreno."
+                    ),
+                )
 
             st.markdown("**Explosivos y accesorios**")
             c10, c11, c12 = st.columns(3)
@@ -256,6 +267,7 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                     equipo_perforacion=equipo,
                     taladros_cargados=taladros_final,
                     taladros_alivio=int(taladros_alivio),
+                    diametro_alivio_mm=diametro_alivio,
                     cartuchos_por_taladro=int(cartuchos_por_taladro),
                     peso_cartucho_kg=peso_cartucho,
                     tipo_explosivo_1=tipo_explosivo_1,
@@ -346,6 +358,37 @@ if estilo_esquema == "Sólido":
 else:
     leyenda_esquema += "."
 st.caption(leyenda_esquema)
+
+st.header(":material/grid_on: Malla de perforación", divider="gray")
+st.caption(
+    "Plantilla paramétrica de corte quemado (alivios al centro, anillos de "
+    "arranque cuadrado→rombo, contorno sobre la sección real) escalada "
+    "según el ancho/alto de la labor — una estimación visual de referencia, "
+    "no el diseño de malla real de campo."
+)
+labor_malla = labores[idx_esquema]
+forma_malla = "Circular" if labor_malla.tipo in LABORES_VERTICALES else labor_malla.forma_seccion
+alto_malla = labor_malla.ancho_m if labor_malla.tipo in LABORES_VERTICALES else labor_malla.alto_m
+fig_malla, anillos_malla = build_malla_perforacion_figure(
+    labor_malla.ancho_m, alto_malla, labor_malla.taladros_cargados, labor_malla.taladros_alivio,
+    diametro_barreno_mm=labor_malla.diametro_barreno_mm, diametro_alivio_mm=labor_malla.diametro_alivio_mm,
+    forma_seccion=forma_malla, nombre_labor=labor_malla.nombre,
+)
+st.plotly_chart(fig_malla, use_container_width=True)
+if anillos_malla:
+    st.caption("Distancias de los anillos de arranque (burden = regla de Holmberg, B₁ = 1.5 × Ø_alivio × √N.° alivios):")
+    st.dataframe(
+        pd.DataFrame(
+            [
+                {
+                    "Anillo": a.anillo, "Forma": a.forma, "N.° taladros": a.n_taladros,
+                    "Burden (mm)": round(a.burden_mm, 1), "Lado (mm)": round(a.lado_mm, 1),
+                }
+                for a in anillos_malla
+            ]
+        ),
+        use_container_width=True, hide_index=True,
+    )
 
 st.subheader(":material/place: Georreferenciación y exportación DXF")
 st.caption(

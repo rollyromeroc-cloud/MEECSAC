@@ -54,6 +54,10 @@ class LaborMinera:
     equipo_perforacion: str = "Jack Leg"
     taladros_cargados: int = 23
     taladros_alivio: int = 2
+    # Diámetro de los taladros de alivio (mm) para la malla de perforación
+    # (ver core.malla_perforacion) — None = usar diametro_barreno_mm (caso
+    # típico en perforación manual sin broca de rimado especial).
+    diametro_alivio_mm: Optional[float] = None
 
     # Explosivos
     cartuchos_por_taladro: int = 4

@@ -90,6 +90,13 @@ def _perfil_por_forma(forma: str | None, ancho: float, alto: float, n_arco: int)
     return perfil_herradura(ancho, alto, n_arco=n_arco)
 
 
+def perfil_seccion(forma: str | None, ancho: float, alto: float, n_arco: int = 24) -> np.ndarray:
+    """Wrapper público de `_perfil_por_forma`, para módulos fuera de
+    geometry.py (p. ej. `core.malla_perforacion`) que necesitan el contorno
+    2D real de la sección sin depender de un helper "privado"."""
+    return _perfil_por_forma(forma, ancho, alto, n_arco)
+
+
 def perimetro_seccion(forma: str | None, ancho: float, alto: float, n_arco: int = 24) -> float:
     """Perímetro (m) del contorno de la sección transversal — usado en el
     diseño de malla de perforación, N.° T = (Perímetro / dt) + (Coef. roca ×
