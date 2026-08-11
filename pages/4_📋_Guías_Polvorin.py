@@ -60,16 +60,7 @@ for i in range(int(n_polvorines)):
             "Nombre de la solicitud/guía", value=f"Solicitud N.° {i + 1}", key=f"polv_nombre_{i}",
         )
 
-        st.markdown("**Concesión / unidad minera de destino**")
-        cm1, cm2 = st.columns(2)
-        concesion_nombre = cm1.text_input("Nombre de la concesión", key=f"polv_conc_nombre_{i}")
-        concesion_codigo = cm2.text_input("Código único", key=f"polv_conc_codigo_{i}")
-        cd1, cd2, cd3 = st.columns(3)
-        concesion_distrito = cd1.text_input("Distrito", key=f"polv_conc_distrito_{i}")
-        concesion_provincia = cd2.text_input("Provincia", key=f"polv_conc_provincia_{i}")
-        concesion_departamento = cd3.text_input("Región/Departamento", key=f"polv_conc_departamento_{i}")
-
-        st.markdown("**Resolución de gerencia relacionada con la solicitud**")
+        st.markdown("**N.° de resolución de gerencia relacionada con la solicitud**")
         rg1, rg2 = st.columns(2)
         resolucion_gerencia_numero = rg1.text_input(
             "N.° de resolución", key=f"polv_res_ger_num_{i}",
@@ -79,6 +70,15 @@ for i in range(int(n_polvorines)):
             "Fecha de emisión (DD/MM/AAAA)", key=f"polv_res_ger_fecha_{i}",
             placeholder="Ej. 12/05/2026",
         )
+
+        st.markdown("**Concesión / unidad minera de destino**")
+        cm1, cm2 = st.columns(2)
+        concesion_nombre = cm1.text_input("Nombre de la concesión", key=f"polv_conc_nombre_{i}")
+        concesion_codigo = cm2.text_input("Código único", key=f"polv_conc_codigo_{i}")
+        cd1, cd2, cd3 = st.columns(3)
+        concesion_distrito = cd1.text_input("Distrito", key=f"polv_conc_distrito_{i}")
+        concesion_provincia = cd2.text_input("Provincia", key=f"polv_conc_provincia_{i}")
+        concesion_departamento = cd3.text_input("Región/Departamento", key=f"polv_conc_departamento_{i}")
 
         with st.expander("¿Polvorín distinto a FAMESA (Huaral)? Sube tus propias plantillas", expanded=False):
             st.caption("Si no subes nada aquí, se usa la plantilla FAMESA (Huaral) por defecto de la app.")
