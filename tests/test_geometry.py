@@ -16,6 +16,7 @@ from core.geometry import (
     perfil_herradura_pura,
     perfil_trapezoidal,
     perimetro_seccion,
+    punto_en_poligono,
     relacion_aspecto,
 )
 
@@ -310,3 +311,19 @@ def test_perimetro_seccion_circular_coincide_con_formula_geometrica():
 def test_perimetro_seccion_positivo_para_todas_las_formas():
     for forma in FORMAS_SECCION:
         assert perimetro_seccion(forma, 1.77, 1.10) > 0
+
+
+def test_punto_en_poligono_cuadrado_simple():
+    cuadrado = np.array([[0.0, 0.0], [2.0, 0.0], [2.0, 2.0], [0.0, 2.0]])
+    assert punto_en_poligono(1.0, 1.0, cuadrado) is True
+    assert punto_en_poligono(3.0, 1.0, cuadrado) is False
+    assert punto_en_poligono(-1.0, 1.0, cuadrado) is False
+
+
+def test_punto_en_poligono_perfil_real_de_seccion():
+    ancho, alto = 1.77, 1.10
+    perfil = perfil_baul(ancho, alto)
+    # el centro de la sección siempre debe caer dentro de su propio perfil
+    assert punto_en_poligono(0.0, alto / 2.0, perfil) is True
+    # un punto muy lejos del contorno siempre debe caer fuera
+    assert punto_en_poligono(ancho * 5, alto * 5, perfil) is False

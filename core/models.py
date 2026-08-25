@@ -209,6 +209,7 @@ class DatosGenerales:
     aprobado_por: str = ""
     numero_plano: str = ""
     revision: str = ""
+    cliente: str = ""
 
 
 @dataclass

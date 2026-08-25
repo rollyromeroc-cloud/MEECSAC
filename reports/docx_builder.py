@@ -115,6 +115,7 @@ def _add_cajetin(document: Document, datos: DatosGenerales) -> None:
         ["Cargo / área", datos.cargo_elaborado_por],
         ["Revisado por", datos.revisado_por],
         ["Aprobado por", datos.aprobado_por],
+        ["Cliente", datos.cliente],
         ["N.° de plano", datos.numero_plano],
         ["Revisión", datos.revision],
     ]

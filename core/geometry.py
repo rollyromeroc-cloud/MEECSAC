@@ -97,6 +97,24 @@ def perfil_seccion(forma: str | None, ancho: float, alto: float, n_arco: int = 2
     return _perfil_por_forma(forma, ancho, alto, n_arco)
 
 
+def punto_en_poligono(y: float, z: float, poligono: np.ndarray) -> bool:
+    """True si (y, z) cae dentro de `poligono` (array (N, 2), cerrado o
+    no) — algoritmo estándar de ray casting (paridad de cruces con un rayo
+    horizontal). Usado para enmascarar interpolaciones (p. ej. isotiempos
+    de detonación) fuera del contorno real de la sección, sin extrapolar."""
+    dentro = False
+    n = len(poligono)
+    y0, z0 = poligono[-1]
+    for i in range(n):
+        y1, z1 = poligono[i]
+        if (z1 > z) != (z0 > z):
+            y_cruce = y0 + (z - z0) * (y1 - y0) / (z1 - z0)
+            if y < y_cruce:
+                dentro = not dentro
+        y0, z0 = y1, z1
+    return dentro
+
+
 def perimetro_seccion(forma: str | None, ancho: float, alto: float, n_arco: int = 24) -> float:
     """Perímetro (m) del contorno de la sección transversal — usado en el
     diseño de malla de perforación, N.° T = (Perímetro / dt) + (Coef. roca ×

@@ -70,6 +70,23 @@ FACTOR_SEGURIDAD_ZONA = {
 ZONAS_ANILLO = ("arranque", "ayuda", "subayuda")  # zonas en anillos concéntricos, en orden
 UMBRAL_ARRASTRE_FRACCION_ALTO = 0.2  # puntos del perfil con z < este × alto → arrastre (zapatera)
 
+# Retardo de iniciación por zona (ms) — secuencia corta creciente desde el
+# arranque hacia el contorno/arrastre, siguiendo el orden estándar de
+# disparo de un round (el arranque rompe primero, hacia el vacío central;
+# el contorno y el arrastre salen al final). Son valores de referencia
+# (equivalentes a una numeración de periodos de detonador no eléctrico
+# tipo Nonel/Exel), no un diseño de timing certificado — el usuario debe
+# ajustar según el sistema de iniciación real que use. None = no detona
+# (taladro de alivio, sin carga).
+RETARDO_MS_POR_ZONA: dict[str, float | None] = {
+    "alivio": None,
+    "arranque": 0.0,
+    "ayuda": 25.0,
+    "subayuda": 50.0,
+    "contorno": 75.0,
+    "arrastre": 100.0,
+}
+
 
 @dataclass
 class PosicionTaladro:
@@ -77,6 +94,7 @@ class PosicionTaladro:
     z: float
     categoria: str  # "alivio" | "arranque" | "ayuda" | "subayuda" | "contorno" | "arrastre"
     anillo: int = 0  # 1, 2, 3 para las zonas en anillo (arranque/ayuda/subayuda); 0 en las demás
+    retardo_ms: float | None = None  # None = no detona (alivio); ver RETARDO_MS_POR_ZONA
 
 
 @dataclass
@@ -230,7 +248,12 @@ def generar_malla_perforacion(
 
     centro = (0.0, alto / 2.0)
     burden_arranque = burden_inicial_m(diametro_alivio_mm, taladros_alivio)
-    espaciado_alivio = (diametro_alivio_mm * 2.5) / 1000.0
+    # el clúster de alivios nunca debe extenderse más allá de la mitad del
+    # burden de arranque — si no, los alivios de los extremos del clúster
+    # quedarían más cerca de los taladros de arranque que lo que el propio
+    # burden calculado asume, y podrían llegar a traslaparse físicamente
+    # con ellos (ver test_validar_traslapes_*).
+    espaciado_alivio = min((diametro_alivio_mm * 2.5) / 1000.0, burden_arranque * 0.5)
 
     posiciones = _cluster_alivio(taladros_alivio, centro, espaciado_alivio)
 
@@ -253,4 +276,69 @@ def generar_malla_perforacion(
         burden_arrastre = burden_zona_m(burden_arranque, "arrastre")
         zonas_info.append(ZonaInfo(zona="Arrastre", n_taladros=n_arrastre, burden_mm=burden_arrastre * 1000.0))
 
+    for taladro in posiciones:
+        taladro.retardo_ms = RETARDO_MS_POR_ZONA[taladro.categoria]
+
     return posiciones, zonas_info
+
+
+@dataclass
+class PasoDisparo:
+    orden: int
+    categoria: str
+    anillo: int
+    retardo_ms: float
+
+
+def secuencia_disparo(taladros: list[PosicionTaladro]) -> list[PasoDisparo]:
+    """Orden de disparo de los taladros CARGADOS (excluye alivio, que no
+    detona), ordenados por retardo ascendente — igual criterio que
+    `RETARDO_MS_POR_ZONA` (ver docstring del módulo)."""
+    cargados = [t for t in taladros if t.retardo_ms is not None]
+    cargados.sort(key=lambda t: t.retardo_ms)
+    return [
+        PasoDisparo(orden=i + 1, categoria=t.categoria, anillo=t.anillo, retardo_ms=t.retardo_ms)
+        for i, t in enumerate(cargados)
+    ]
+
+
+@dataclass
+class ConflictoTaladro:
+    """Dos taladros perforados demasiado cerca uno del otro — nunca se
+    corrige en silencio, solo se detecta y reporta (igual criterio que
+    cualquier validación de traslapes: la decisión de ajustar el diseño
+    queda del lado del usuario)."""
+    indice_a: int
+    indice_b: int
+    categoria_a: str
+    categoria_b: str
+    distancia_m: float
+    minimo_requerido_m: float
+
+
+def validar_traslapes(
+    taladros: list[PosicionTaladro], diametro_barreno_mm: float, margen_m: float = 0.01,
+) -> list[ConflictoTaladro]:
+    """Detecta pares de taladros perforados más cerca entre sí que
+    `2×radio_barreno + margen_m` — un traslape físico entre barrenos, o un
+    espaciamiento tan ajustado que no cabría el explosivo/taco con
+    seguridad. `margen_m` por defecto es deliberadamente pequeño (1 cm):
+    en un corte quemado los anillos consecutivos de arranque/ayuda/
+    subayuda están, por diseño, muy cerca entre sí (eso es justamente lo
+    que mide el burden) — un margen grande generaría falsos positivos
+    permanentes en cualquier malla bien diseñada. No modifica la malla;
+    el diseño se ajusta manualmente (cambiando N.° de taladros, sección o
+    parámetros de burden) si hay conflictos."""
+    radio_m = (diametro_barreno_mm / 1000.0) / 2.0
+    minimo_requerido_m = 2 * radio_m + margen_m
+    conflictos: list[ConflictoTaladro] = []
+    for i in range(len(taladros)):
+        for j in range(i + 1, len(taladros)):
+            a, b = taladros[i], taladros[j]
+            distancia_m = math.hypot(a.y - b.y, a.z - b.z)
+            if distancia_m < minimo_requerido_m:
+                conflictos.append(ConflictoTaladro(
+                    indice_a=i, indice_b=j, categoria_a=a.categoria, categoria_b=b.categoria,
+                    distancia_m=distancia_m, minimo_requerido_m=minimo_requerido_m,
+                ))
+    return conflictos

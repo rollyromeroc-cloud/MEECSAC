@@ -5,9 +5,13 @@ import pytest
 from core.malla_perforacion import (
     FACTOR_BURDEN_HOLMBERG,
     FACTOR_SEGURIDAD_ZONA,
+    RETARDO_MS_POR_ZONA,
+    PosicionTaladro,
     burden_inicial_m,
     burden_zona_m,
     generar_malla_perforacion,
+    secuencia_disparo,
+    validar_traslapes,
 )
 
 
@@ -167,3 +171,65 @@ def test_factor_burden_holmberg_y_tabla_de_seguridad_son_positivos():
     orden = ["arranque", "ayuda", "subayuda", "contorno", "arrastre"]
     valores = [FACTOR_SEGURIDAD_ZONA[z] for z in orden]
     assert valores == sorted(valores, reverse=True)
+
+
+def test_retardo_asignado_por_zona_alivio_nunca_detona():
+    malla, _ = generar_malla_perforacion(
+        ancho=1.77, alto=1.10, taladros_cargados=23, taladros_alivio=2,
+        diametro_barreno_mm=36.0, forma_seccion="Baúl (hastiales rectos)",
+    )
+    for t in malla:
+        assert t.retardo_ms == RETARDO_MS_POR_ZONA[t.categoria]
+    alivios = [t for t in malla if t.categoria == "alivio"]
+    assert all(t.retardo_ms is None for t in alivios)
+    cargados = [t for t in malla if t.categoria != "alivio"]
+    assert all(t.retardo_ms is not None for t in cargados)
+
+
+def test_secuencia_disparo_ordenada_por_retardo_ascendente_y_excluye_alivio():
+    malla, _ = generar_malla_perforacion(
+        ancho=1.77, alto=1.10, taladros_cargados=23, taladros_alivio=2,
+        diametro_barreno_mm=36.0, forma_seccion="Baúl (hastiales rectos)",
+    )
+    pasos = secuencia_disparo(malla)
+    assert len(pasos) == 23  # excluye los 2 alivios
+    assert [p.orden for p in pasos] == list(range(1, 24))
+    retardos = [p.retardo_ms for p in pasos]
+    assert retardos == sorted(retardos)
+    assert pasos[0].categoria == "arranque"  # el arranque siempre dispara primero
+
+
+def test_validar_traslapes_sin_conflictos_con_alivio_rimado_de_diametro_adecuado():
+    # un solo taladro de alivio "rimado" (broca de mayor diámetro, como en
+    # la práctica real) da un burden inicial holgado — malla sin conflictos
+    malla, _ = generar_malla_perforacion(
+        ancho=2.00, alto=2.00, taladros_cargados=23, taladros_alivio=1,
+        diametro_barreno_mm=36.0, diametro_alivio_mm=89.0, forma_seccion="Baúl (hastiales rectos)",
+    )
+    conflictos = validar_traslapes(malla, diametro_barreno_mm=36.0)
+    assert conflictos == []
+
+
+def test_validar_traslapes_detecta_anillos_de_arranque_demasiado_juntos():
+    # con 2 alivios SIN rimar (mismo diámetro que el barreno, 36mm) el
+    # burden inicial es más ajustado y el propio patrón cuadrado→rombo
+    # concéntrico puede acercar demasiado dos anillos consecutivos — la
+    # validación debe surfacear esto, no ocultarlo silenciosamente.
+    malla, _ = generar_malla_perforacion(
+        ancho=2.00, alto=2.00, taladros_cargados=23, taladros_alivio=2,
+        diametro_barreno_mm=36.0, forma_seccion="Baúl (hastiales rectos)",
+    )
+    conflictos = validar_traslapes(malla, diametro_barreno_mm=36.0)
+    assert len(conflictos) > 0
+    assert all(c.distancia_m < c.minimo_requerido_m for c in conflictos)
+
+
+def test_validar_traslapes_detecta_taladros_demasiado_juntos():
+    taladros = [
+        PosicionTaladro(y=0.0, z=0.5, categoria="arranque", anillo=1),
+        PosicionTaladro(y=0.01, z=0.5, categoria="arranque", anillo=1),  # a 1cm — imposible con broca de 36mm
+    ]
+    conflictos = validar_traslapes(taladros, diametro_barreno_mm=36.0)
+    assert len(conflictos) == 1
+    assert conflictos[0].distancia_m == pytest.approx(0.01)
+    assert conflictos[0].minimo_requerido_m == pytest.approx(0.036 + 0.01)

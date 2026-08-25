@@ -9,6 +9,7 @@ from __future__ import annotations
 import plotly.graph_objects as go
 
 from core.geometry import perfil_seccion
+from core.isotimes import malla_isotiempos
 from core.malla_perforacion import PosicionTaladro, ZonaInfo, ZONAS_ANILLO, generar_malla_perforacion
 
 COLOR_CONTORNO_PERFIL = "#444444"
@@ -98,14 +99,17 @@ def build_malla_perforacion_figure(
         )
 
     centro_y, centro_z = 0.0, alto / 2.0
-    for info in zonas_info:
-        if info.zona.lower() not in ZONAS_ANILLO:
-            continue
+    zonas_anillo_usadas = [z for z in zonas_info if z.zona.lower() in ZONAS_ANILLO]
+    for i, info in enumerate(zonas_anillo_usadas):
+        # burdens de zonas consecutivas suelen quedar muy cerca en planta
+        # (mismo orden de cm) — se escalonan verticalmente para que las
+        # etiquetas nunca se superpongan, sin importar qué tan juntas
+        # queden en x.
         radio_m = info.burden_mm / 1000.0
         fig.add_annotation(
             x=centro_y + radio_m, y=centro_z,
             text=f"{info.zona}: {info.burden_mm:.0f} mm",
-            showarrow=False, yshift=12,
+            showarrow=False, yshift=14 + 13 * (len(zonas_anillo_usadas) - 1 - i),
             font=dict(color=COLOR_COTA_ANILLO, size=10),
         )
 
@@ -118,3 +122,56 @@ def build_malla_perforacion_figure(
         margin=dict(l=10, r=10, t=40, b=10),
     )
     return fig, zonas_info
+
+
+def build_isotiempos_figure(
+    malla: list[PosicionTaladro],
+    ancho: float,
+    alto: float,
+    forma_seccion: str | None = None,
+    nombre_labor: str = "",
+) -> go.Figure | None:
+    """Mapa de calor de isotiempos de detonación (ms), interpolado y
+    enmascarado al contorno real de la sección — ver `core.isotimes`.
+    Devuelve `None` si no hay suficientes taladros cargados para
+    interpolar (el llamador debe mostrar un aviso en ese caso)."""
+    resultado = malla_isotiempos(malla, forma_seccion, ancho, alto)
+    if resultado is None:
+        return None
+    Y, Z, T = resultado
+    perfil = perfil_seccion(forma_seccion, ancho, alto)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Heatmap(
+            x=Y[0, :], y=Z[:, 0], z=T,
+            colorscale="YlOrRd", colorbar=dict(title="ms"),
+            hovertemplate="Retardo: %{z:.0f} ms<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=list(perfil[:, 0]) + [perfil[0, 0]],
+            y=list(perfil[:, 1]) + [perfil[0, 1]],
+            mode="lines", line=dict(color=COLOR_CONTORNO_PERFIL, width=2),
+            name="Contorno de la sección", hoverinfo="skip",
+        )
+    )
+    con_retardo = [t for t in malla if t.retardo_ms is not None]
+    fig.add_trace(
+        go.Scatter(
+            x=[t.y for t in con_retardo], y=[t.z for t in con_retardo],
+            mode="markers", marker=dict(size=6, color="black"),
+            name="Taladros cargados", hoverinfo="skip",
+        )
+    )
+
+    titulo = f"Isotiempos de detonación — {nombre_labor}" if nombre_labor else "Isotiempos de detonación"
+    fig.update_layout(
+        title=titulo,
+        xaxis=dict(title="", showgrid=False, zeroline=False, scaleanchor="y", scaleratio=1),
+        yaxis=dict(title="", showgrid=False, zeroline=False),
+        margin=dict(l=10, r=10, t=40, b=10),
+        showlegend=False,
+    )
+    return fig

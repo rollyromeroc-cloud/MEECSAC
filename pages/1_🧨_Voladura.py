@@ -31,6 +31,11 @@ from core.georef import (
     matriz_rotacion_vertical,
     transformar_vertices,
 )
+from core.malla_perforacion import (
+    generar_malla_perforacion,
+    secuencia_disparo,
+    validar_traslapes,
+)
 from core.memoria import memoria_calculo
 from core.models import DatosGenerales, LaborMinera
 from core.voladura import (
@@ -41,7 +46,8 @@ from core.voladura import (
 )
 from reports.docx_builder import build_voladura_report
 from reports.dxf_export import construir_dxf_labor
-from viz.malla_plot import build_malla_perforacion_figure
+from reports.malla_pdf import build_malla_pdf
+from viz.malla_plot import build_isotiempos_figure, build_malla_perforacion_figure
 from viz.tunnel_plot import build_tunnel_figure, build_tunnel_figure_solido
 
 st.set_page_config(page_title="Voladura", page_icon=str(LOGO_PATH), layout="wide")
@@ -394,6 +400,71 @@ if zonas_malla:
         use_container_width=True, hide_index=True,
     )
 
+malla_taladros, _ = generar_malla_perforacion(
+    labor_malla.ancho_m, alto_malla, labor_malla.taladros_cargados, labor_malla.taladros_alivio,
+    diametro_barreno_mm=labor_malla.diametro_barreno_mm, diametro_alivio_mm=labor_malla.diametro_alivio_mm,
+    forma_seccion=forma_malla,
+)
+conflictos_malla = validar_traslapes(malla_taladros, diametro_barreno_mm=labor_malla.diametro_barreno_mm)
+if conflictos_malla:
+    st.warning(
+        f"{len(conflictos_malla)} par(es) de taladros quedaron más cerca entre sí que la "
+        "distancia mínima segura para el diámetro de barreno indicado — revisa la sección, "
+        "el N.° de alivios/taladros o el diámetro de alivio."
+    )
+    st.dataframe(
+        pd.DataFrame([
+            {
+                "Categoría A": c.categoria_a, "Categoría B": c.categoria_b,
+                "Distancia (mm)": round(c.distancia_m * 1000, 0),
+                "Mínimo requerido (mm)": round(c.minimo_requerido_m * 1000, 0),
+            }
+            for c in conflictos_malla
+        ]),
+        use_container_width=True, hide_index=True,
+    )
+
+with st.expander(":material/schedule: Secuencia de disparo (retardos)"):
+    st.caption(
+        "Orden de disparo por zona (arranque primero, arrastre al final) — retardos de "
+        "referencia (ver core.malla_perforacion.RETARDO_MS_POR_ZONA), no un diseño de "
+        "timing certificado; ajusta según el sistema de iniciación real que uses."
+    )
+    pasos_disparo = secuencia_disparo(malla_taladros)
+    st.dataframe(
+        pd.DataFrame([
+            {"Orden": p.orden, "Categoría": p.categoria, "Anillo": p.anillo or None, "Retardo (ms)": p.retardo_ms}
+            for p in pasos_disparo
+        ]),
+        use_container_width=True, hide_index=True,
+    )
+
+with st.expander(":material/thermostat: Isotiempos de detonación"):
+    st.caption(
+        "Mapa de calor del retardo interpolado dentro del contorno real de la sección — "
+        "interpolación numérica (sin extrapolar fuera de la sección), no una simulación "
+        "física de propagación de onda."
+    )
+    fig_isotiempos = build_isotiempos_figure(
+        malla_taladros, labor_malla.ancho_m, alto_malla, forma_seccion=forma_malla,
+        nombre_labor=labor_malla.nombre,
+    )
+    if fig_isotiempos is None:
+        st.info("Se requieren al menos 3 taladros cargados para interpolar los isotiempos.")
+    else:
+        st.plotly_chart(fig_isotiempos, use_container_width=True)
+
+st.markdown("**Ficha de malla en PDF**")
+pdf_malla_bytes = build_malla_pdf(labor_malla, resultados[idx_esquema], st.session_state.get("datos_generales"))
+st.download_button(
+    "Descargar ficha de malla (PDF A3)",
+    data=pdf_malla_bytes,
+    file_name=f"malla_{labor_malla.nombre}.pdf",
+    mime="application/pdf",
+    icon=":material/download:",
+    key=f"descargar_malla_pdf_{labor_malla.nombre}",
+)
+
 st.subheader(":material/place: Georreferenciación y exportación DXF")
 st.caption(
     "Ubica el punto de inicio real (UTM + cota) de esta labor para exportar "
@@ -637,6 +708,7 @@ with st.expander("Datos generales del informe (opcional)", icon=":material/badge
     with c6:
         dg.numero_plano = st.text_input("N.° de plano", value=dg.numero_plano)
         dg.revision = st.text_input("Revisión", value=dg.revision, placeholder="0")
+        dg.cliente = st.text_input("Cliente", value=dg.cliente)
 
 estilo_reporte = "solido" if estilo_esquema == "Sólido" else "wireframe"
 buffer = build_voladura_report(
