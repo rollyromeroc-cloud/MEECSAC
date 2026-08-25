@@ -100,8 +100,19 @@ def build_malla_pdf(
         diametro_barreno_mm=labor.diametro_barreno_mm, diametro_alivio_mm=labor.diametro_alivio_mm,
         forma_seccion=forma, nombre_labor=labor.nombre,
     )
-    png_bytes = fig.to_image(format="png", width=1100, height=950, scale=2)
-    imagen_malla = Image(BytesIO(png_bytes), width=150 * mm, height=130 * mm)
+    try:
+        png_bytes = fig.to_image(format="png", width=1100, height=950, scale=2)
+        imagen_malla: Image | Paragraph = Image(BytesIO(png_bytes), width=150 * mm, height=130 * mm)
+    except Exception:
+        # el entorno de despliegue puede no tener lo necesario para exportar
+        # gráficos Plotly a PNG (p. ej. Chrome, requerido por kaleido>=1) —
+        # se degrada a una nota en vez de romper toda la ficha (mismo
+        # criterio que reports.docx_builder para el esquema 3D del Word).
+        imagen_malla = Paragraph(
+            "(Imagen de la malla no disponible en este entorno — sigue disponible la "
+            "tabla de distancias por zona más abajo)",
+            _ESTILO_NOTA,
+        )
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
