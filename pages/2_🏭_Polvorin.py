@@ -12,8 +12,15 @@ from auth import require_login
 
 LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_meecsac.jpg"
 from core.constants import HEMISFERIO_DEFAULT, TIPOS_PUNTO_RIESGO, ZONA_UTM_DEFAULT
+from core.emr import FACTORES_DIN60
 from core.models import Polvorin, PuntoRiesgo
-from core.polvorin import area_shoelace, evaluar_distancias, perimetro
+from core.polvorin import (
+    area_shoelace,
+    distancia_sugerida_tabla_k_m,
+    emr_kg_polvorin,
+    evaluar_distancias,
+    perimetro,
+)
 from reports.docx_builder import build_polvorin_report
 
 st.set_page_config(page_title="Polvorín", page_icon=str(LOGO_PATH), layout="wide")
@@ -53,6 +60,10 @@ with st.expander("Agregar polvorín", icon=":material/add_circle:", expanded=len
         with c1:
             nombre_p = st.text_input("Nombre", placeholder="Ej. Polvorín de Explosivos 1")
             tipo_p = st.selectbox("Tipo", ["Explosivos", "Accesorios"])
+            tipo_instalacion_p = st.selectbox(
+                "Tipo de instalación", ["Superficial", "Subterráneo"],
+                help="Define qué tabla de valores de K se usa para sugerir la distancia mínima de seguridad.",
+            )
         with c2:
             este_p = st.number_input("Este UTM", value=500000.0, format="%.2f")
             norte_p = st.number_input("Norte UTM", value=8390000.0, format="%.2f")
@@ -71,6 +82,19 @@ with st.expander("Agregar polvorín", icon=":material/add_circle:", expanded=len
             key="vertices_editor",
         )
 
+        st.caption(
+            "Composición almacenada (opcional, para calcular el EMR — equivalente en kg de "
+            "dinamita 60% — y sugerir la distancia mínima de seguridad por la Tabla N.° 2 de K):"
+        )
+        items_df = st.data_editor(
+            pd.DataFrame({"Ítem": pd.Series(dtype="str"), "Cantidad": pd.Series(dtype="float")}),
+            num_rows="dynamic",
+            column_config={
+                "Ítem": st.column_config.SelectboxColumn(options=sorted(FACTORES_DIN60)),
+            },
+            key="items_editor",
+        )
+
         enviado_p = st.form_submit_button("Agregar polvorín", icon=":material/add:", type="primary")
         if enviado_p:
             if not nombre_p:
@@ -81,14 +105,21 @@ with st.expander("Agregar polvorín", icon=":material/add_circle:", expanded=len
                     for _, row in vertices_df.iterrows()
                     if pd.notna(row["Este"]) and pd.notna(row["Norte"])
                 ]
+                items_almacenados = [
+                    (row["Ítem"], row["Cantidad"])
+                    for _, row in items_df.iterrows()
+                    if pd.notna(row["Ítem"]) and pd.notna(row["Cantidad"]) and row["Cantidad"] > 0
+                ]
                 polvorin = Polvorin(
                     nombre=nombre_p,
                     tipo=tipo_p,
+                    tipo_instalacion=tipo_instalacion_p,
                     este_utm=este_p,
                     norte_utm=norte_p,
                     vertices_cerco=vertices,
                     cantidad_almacenada_kg=cantidad_kg or None,
                     radio_influencia_m=radio_influencia or None,
+                    items_almacenados=items_almacenados,
                 )
                 st.session_state["polvorines"].append(polvorin)
                 st.success(f"Polvorín '{nombre_p}' agregado.")
@@ -134,12 +165,20 @@ for polvorin in polvorines:
     with st.container(border=True):
         c1, c2 = st.columns([3, 1])
         with c1:
-            st.subheader(f"{polvorin.tipo}: {polvorin.nombre}")
+            st.subheader(f"{polvorin.tipo}: {polvorin.nombre} ({polvorin.tipo_instalacion})")
             st.write(f"Coordenadas: Este {polvorin.este_utm}, Norte {polvorin.norte_utm}")
             if polvorin.vertices_cerco:
                 st.write(
                     f"Área del cerco: {area_shoelace(polvorin.vertices_cerco):,.2f} m² · "
                     f"Perímetro: {perimetro(polvorin.vertices_cerco):,.2f} m"
+                )
+            emr_kg = emr_kg_polvorin(polvorin)
+            if emr_kg is not None:
+                st.write(f"EMR (kg equiv. dinamita 60%): {emr_kg:,.2f} kg · ∛EMR: {emr_kg ** (1/3):,.3f}")
+            else:
+                st.caption(
+                    "Sin composición registrada — agrégala al crear el polvorín para calcular "
+                    "el EMR y sugerir la distancia mínima de seguridad."
                 )
         with c2:
             if st.button("Eliminar", key=f"del_{polvorin.nombre}", icon=":material/delete:"):
@@ -148,19 +187,25 @@ for polvorin in polvorines:
 
         resultados = resultados_por_polvorin[polvorin.nombre]
         if resultados:
-            df = pd.DataFrame(
-                [
-                    {
-                        "Punto de riesgo": r.punto_nombre,
-                        "Tipo": r.punto_tipo,
-                        "Distancia real (m)": round(r.distancia_real_m, 2),
-                        "Distancia mínima (m)": r.distancia_minima_m,
-                        "¿Cumple?": "✅ Sí" if r.cumple else "❌ No",
-                    }
-                    for r in resultados
-                ]
+            filas = []
+            for r in resultados:
+                sugerida = distancia_sugerida_tabla_k_m(polvorin, r.punto_tipo)
+                d_barricado, d_libre = sugerida if sugerida else (None, None)
+                filas.append({
+                    "Punto de riesgo": r.punto_nombre,
+                    "Tipo": r.punto_tipo,
+                    "Distancia real (m)": round(r.distancia_real_m, 2),
+                    "Distancia mínima (m)": r.distancia_minima_m,
+                    "Sugerida tabla K — barricado (m)": round(d_barricado, 2) if d_barricado else None,
+                    "Sugerida tabla K — libre/2D (m)": round(d_libre, 2) if d_libre else None,
+                    "¿Cumple?": "✅ Sí" if r.cumple else "❌ No",
+                })
+            st.dataframe(pd.DataFrame(filas), use_container_width=True, hide_index=True)
+            st.caption(
+                "La columna \"¿Cumple?\" se evalúa contra la distancia mínima que confirmaste al "
+                "agregar el punto de riesgo — las columnas de la Tabla K son una sugerencia de "
+                "referencia, no reemplazan esa verificación."
             )
-            st.dataframe(df, use_container_width=True, hide_index=True)
         else:
             st.caption("Sin puntos de riesgo registrados todavía.")
 

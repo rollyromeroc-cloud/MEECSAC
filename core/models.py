@@ -151,11 +151,17 @@ class Polvorin:
 
     nombre: str
     tipo: str = "Explosivos"  # "Explosivos" o "Accesorios"
+    tipo_instalacion: str = "Superficial"  # "Superficial" o "Subterráneo" — define la tabla de K usada
     este_utm: float = 0.0
     norte_utm: float = 0.0
     vertices_cerco: list[tuple[float, float]] = field(default_factory=list)
     cantidad_almacenada_kg: Optional[float] = None
     radio_influencia_m: Optional[float] = None
+    # composición almacenada: (nombre_item de core.emr.FACTORES_DIN60, cantidad)
+    # — si se completa, el EMR (kg equivalente dinamita 60%) se calcula a
+    # partir de esto en vez de asumirlo igual a `cantidad_almacenada_kg`
+    # (que es kg de producto real, no necesariamente equivalente).
+    items_almacenados: list[tuple[str, float]] = field(default_factory=list)
 
 
 @dataclass

@@ -1,7 +1,14 @@
 import pytest
 
 from core.models import Polvorin, PuntoRiesgo
-from core.polvorin import area_shoelace, calcular_guias, distancia_utm, evaluar_distancias
+from core.polvorin import (
+    area_shoelace,
+    calcular_guias,
+    distancia_sugerida_tabla_k_m,
+    distancia_utm,
+    emr_kg_polvorin,
+    evaluar_distancias,
+)
 
 
 def test_area_shoelace_cuadrado():
@@ -42,6 +49,45 @@ def test_polvorin_radio_influencia_opcional():
 
     con_radio = Polvorin(nombre="Polvorín 1", este_utm=0, norte_utm=0, radio_influencia_m=30.23)
     assert con_radio.radio_influencia_m == pytest.approx(30.23)
+
+
+def test_emr_kg_polvorin_none_sin_composicion():
+    polvorin = Polvorin(nombre="Polvorín 1", este_utm=0, norte_utm=0)
+    assert emr_kg_polvorin(polvorin) is None
+
+
+def test_emr_kg_polvorin_calcula_desde_items_almacenados():
+    polvorin = Polvorin(
+        nombre="Polvorín 1", este_utm=0, norte_utm=0,
+        items_almacenados=[("Dinamita gelatina 80%", 2500)],
+    )
+    assert emr_kg_polvorin(polvorin) == pytest.approx(2500 * 0.787)
+
+
+def test_distancia_sugerida_tabla_k_none_sin_emr():
+    polvorin = Polvorin(nombre="Polvorín 1", este_utm=0, norte_utm=0)
+    assert distancia_sugerida_tabla_k_m(polvorin, "Edificio habitado") is None
+
+
+def test_distancia_sugerida_tabla_k_superficial_vs_subterraneo():
+    base = dict(
+        nombre="Polvorín 1", este_utm=0, norte_utm=0,
+        items_almacenados=[("Dinamita gelatina 80%", 2500)],
+    )
+    superficial = Polvorin(tipo_instalacion="Superficial", **base)
+    subterraneo = Polvorin(tipo_instalacion="Subterráneo", **base)
+    d_sup, _ = distancia_sugerida_tabla_k_m(superficial, "Edificio habitado")
+    d_sub, _ = distancia_sugerida_tabla_k_m(subterraneo, "Edificio habitado")
+    assert d_sup > d_sub  # K=15 (superficial) vs K=8 (subterráneo)
+
+
+def test_distancia_sugerida_tabla_k_none_si_no_esta_en_la_tabla():
+    polvorin = Polvorin(
+        nombre="Polvorín 1", este_utm=0, norte_utm=0, tipo_instalacion="Subterráneo",
+        items_almacenados=[("Dinamita gelatina 80%", 2500)],
+    )
+    # "Agentes externos de riesgo" no está definido para polvorín subterráneo
+    assert distancia_sugerida_tabla_k_m(polvorin, "Agentes externos de riesgo") is None
 
 
 # Casos dorados tomados de un formato real de guías de polvorín (SUCAMEC):

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 
+from core.emr import TABLA_K_SUBTERRANEO, TABLA_K_SUPERFICIAL, distancia_seguridad_m, emr_total_kg
 from core.models import Polvorin, PuntoRiesgo, ResultadoDistancia
 
 
@@ -78,6 +79,34 @@ def calcular_guias(cantidad_solicitada: float, capacidad_por_guia: float) -> dic
         "cantidad_restante": cantidad_restante,
         "guias_totales": guias_completas + guia_restante,
     }
+
+
+def emr_kg_polvorin(polvorin: Polvorin) -> float | None:
+    """EMR (kg equivalente dinamita 60%) de `polvorin`, a partir de su
+    composición (`items_almacenados`) — `None` si no se registró
+    composición (no se asume `cantidad_almacenada_kg` como equivalente,
+    porque es kg de producto real, no necesariamente kg equivalente)."""
+    if not polvorin.items_almacenados:
+        return None
+    return emr_total_kg(polvorin.items_almacenados)
+
+
+def distancia_sugerida_tabla_k_m(polvorin: Polvorin, tipo_punto_riesgo: str) -> tuple[float, float] | None:
+    """(D barricado, D libre) sugeridas por la Tabla N.° 2 de valores de K
+    (ver `core.emr`), a partir del EMR del polvorín y su
+    `tipo_instalacion` (Superficial/Subterráneo). `None` si no hay EMR
+    calculable o la tabla no define K para `tipo_punto_riesgo` en ese tipo
+    de instalación. Es una SUGERENCIA de referencia — la distancia que
+    determina el cumplimiento sigue siendo la que el usuario confirma en
+    `PuntoRiesgo.distancia_minima_requerida_m` (ver docstring del módulo)."""
+    emr_kg = emr_kg_polvorin(polvorin)
+    if not emr_kg:
+        return None
+    tabla = TABLA_K_SUPERFICIAL if polvorin.tipo_instalacion == "Superficial" else TABLA_K_SUBTERRANEO
+    k = tabla.get(tipo_punto_riesgo)
+    if k is None:
+        return None
+    return distancia_seguridad_m(emr_kg, k)
 
 
 def evaluar_distancias(
