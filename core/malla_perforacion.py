@@ -239,17 +239,19 @@ def _puntos_contorno(
     vértices propios ahí, así que un reparto por índice de vértice casi
     nunca cae en el piso y deja la zona de arrastre sin taladros;
     repartir por longitud de arco sí le da al piso su parte proporcional
-    del perímetro). Los puntos se desplazan `margen` metros hacia el centro
-    (aproximación: escala el perfil respecto a su propio centro geométrico,
-    no un offset geométrico exacto de curva paralela — suficiente para un
-    margen pequeño)."""
+    del perímetro). Cada punto se desplaza `margen` metros hacia el centro
+    a lo largo de su propia dirección radial — un offset POR PUNTO, no un
+    factor de escala global: con un factor global el desplazamiento real
+    depende de qué tan lejos del centroide esté cada punto, y los del piso
+    (los más alejados en secciones altas) se movían mucho más que `margen`,
+    subiendo por encima del umbral de arrastre y dejando la zapatera sin
+    taladros. No es el offset exacto de una curva paralela, pero sí respeta
+    la distancia pedida en cada punto."""
     if n_puntos <= 0:
         return []
     perfil = perfil_seccion(forma, ancho, alto, n_arco=max(24, n_puntos * 2))
     centro_y = float(np.mean(perfil[:, 0]))
     centro_z = float(np.mean(perfil[:, 1]))
-    radio_medio = float(np.mean(np.hypot(perfil[:, 0] - centro_y, perfil[:, 1] - centro_z)))
-    factor = max(0.0, (radio_medio - margen) / radio_medio) if radio_medio > 0 else 1.0
 
     cerrado = np.vstack([perfil, perfil[:1]])  # incluye el tramo de piso (último → primero)
     segmentos = np.diff(cerrado, axis=0)
@@ -267,10 +269,10 @@ def _puntos_contorno(
         t = (s - s0) / (s1 - s0) if s1 > s0 else 0.0
         y = cerrado[idx, 0] + t * (cerrado[idx + 1, 0] - cerrado[idx, 0])
         z = cerrado[idx, 1] + t * (cerrado[idx + 1, 1] - cerrado[idx, 1])
-        puntos.append((
-            centro_y + (y - centro_y) * factor,
-            centro_z + (z - centro_z) * factor,
-        ))
+        dy, dz = y - centro_y, z - centro_z
+        distancia = math.hypot(dy, dz)
+        factor = max(0.0, (distancia - margen) / distancia) if distancia > 0 else 0.0
+        puntos.append((centro_y + dy * factor, centro_z + dz * factor))
     return puntos
 
 

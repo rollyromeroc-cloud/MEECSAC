@@ -13,13 +13,19 @@ from core.isotimes import malla_isotiempos
 from core.malla_perforacion import PosicionTaladro, ZonaInfo, ZONAS_ANILLO, generar_malla_perforacion
 
 COLOR_CONTORNO_PERFIL = "#444444"
-COLOR_ALIVIO = "#882255"
-COLOR_ARRANQUE = "#44AA99"
-COLOR_AYUDA = "#88CCEE"
-COLOR_SUBAYUDA = "#DDCC77"
-COLOR_CONTORNO_TALADRO = "#117733"
-COLOR_ARRASTRE = "#CC6677"
+# Paleta de alto contraste (círculos llenos de color vivo, alivio en blanco
+# con borde oscuro) — estilo de referencia de una malla real de campo, en
+# vez de la paleta pastel anterior: solo cambia la presentación visual, las
+# 5 zonas y su lógica de cálculo (`core.malla_perforacion`) no cambian.
+COLOR_ALIVIO = "#FFFFFF"
+COLOR_ARRANQUE = "#E63946"
+COLOR_AYUDA = "#F4A100"
+COLOR_SUBAYUDA = "#4CC9F0"
+COLOR_CONTORNO_TALADRO = "#1D3557"
+COLOR_ARRASTRE = "#2A9D8F"
 COLOR_COTA_ANILLO = "#AA4499"
+COLOR_BORDE_TALADRO = "#22242A"
+COLOR_TRAZO_ANILLO = "#6B7280"
 
 _NOMBRE_CATEGORIA = {
     "alivio": "Alivio (sin carga)",
@@ -36,10 +42,6 @@ _COLOR_CATEGORIA = {
     "subayuda": COLOR_SUBAYUDA,
     "contorno": COLOR_CONTORNO_TALADRO,
     "arrastre": COLOR_ARRASTRE,
-}
-_SIMBOLO_CATEGORIA = {
-    "alivio": "circle-open", "arranque": "circle", "ayuda": "circle",
-    "subayuda": "circle", "contorno": "circle", "arrastre": "square",
 }
 _ORDEN_CATEGORIAS = ("alivio", "arranque", "ayuda", "subayuda", "contorno", "arrastre")
 
@@ -79,6 +81,25 @@ def build_malla_perforacion_figure(
         )
     )
 
+    # trazos de cuadrado/rombo que unen los taladros de cada anillo del
+    # corte — la "forma" que `ZonaInfo` ya calcula y que en una malla
+    # dibujada a mano se traza siempre, para que se lea de un vistazo cómo
+    # abre cada sección contra la anterior. Se dibujan antes que los
+    # marcadores para que las líneas queden por debajo de los taladros.
+    for zona in ZONAS_ANILLO:
+        anillo = [t for t in malla if t.categoria == zona]
+        if len(anillo) < 3:
+            continue  # con menos de 3 taladros no hay polígono que trazar
+        ys = [t.y for t in anillo] + [anillo[0].y]
+        zs = [t.z for t in anillo] + [anillo[0].z]
+        fig.add_trace(
+            go.Scatter(
+                x=ys, y=zs, mode="lines",
+                line=dict(color=COLOR_TRAZO_ANILLO, width=1.2),
+                showlegend=False, hoverinfo="skip",
+            )
+        )
+
     for categoria in _ORDEN_CATEGORIAS:
         puntos = [t for t in malla if t.categoria == categoria]
         if not puntos:
@@ -89,8 +110,8 @@ def build_malla_perforacion_figure(
                 y=[t.z for t in puntos],
                 mode="markers",
                 marker=dict(
-                    size=13, color=_COLOR_CATEGORIA[categoria], symbol=_SIMBOLO_CATEGORIA[categoria],
-                    line=dict(width=2, color=_COLOR_CATEGORIA[categoria]),
+                    size=15, color=_COLOR_CATEGORIA[categoria], symbol="circle",
+                    line=dict(width=1.5, color=COLOR_BORDE_TALADRO),
                 ),
                 name=f"{_NOMBRE_CATEGORIA[categoria]} ({len(puntos)})",
                 hovertext=[_NOMBRE_CATEGORIA[categoria] for _ in puntos],
@@ -101,15 +122,18 @@ def build_malla_perforacion_figure(
     centro_y, centro_z = 0.0, alto / 2.0
     zonas_anillo_usadas = [z for z in zonas_info if z.zona.lower() in ZONAS_ANILLO]
     for i, info in enumerate(zonas_anillo_usadas):
-        # burdens de zonas consecutivas suelen quedar muy cerca en planta
-        # (mismo orden de cm) — se escalonan verticalmente para que las
-        # etiquetas nunca se superpongan, sin importar qué tan juntas
-        # queden en x.
+        # las etiquetas se sacan fuera del corte (a la derecha del anillo
+        # más externo) con una flecha hacia su propio anillo: puestas sobre
+        # el anillo mismo tapaban los taladros del corte, que es justo la
+        # zona más densa de la malla.
         radio_m = info.burden_mm / 1000.0
         fig.add_annotation(
             x=centro_y + radio_m, y=centro_z,
+            ax=40, ay=-30 - 18 * (len(zonas_anillo_usadas) - 1 - i),
+            axref="pixel", ayref="pixel",
             text=f"{info.zona}: {info.burden_mm:.0f} mm",
-            showarrow=False, yshift=14 + 13 * (len(zonas_anillo_usadas) - 1 - i),
+            showarrow=True, arrowhead=2, arrowsize=0.8, arrowwidth=1,
+            arrowcolor=COLOR_COTA_ANILLO, xanchor="left",
             font=dict(color=COLOR_COTA_ANILLO, size=10),
         )
 
@@ -118,7 +142,12 @@ def build_malla_perforacion_figure(
         title=titulo,
         xaxis=dict(title="", showgrid=False, zeroline=False, scaleanchor="y", scaleratio=1),
         yaxis=dict(title="", showgrid=False, zeroline=False),
-        legend=dict(orientation="h", yanchor="bottom", y=-0.25, x=0.0),
+        # leyenda en caja (como una ficha de campo), no solo texto flotante
+        legend=dict(
+            orientation="h", yanchor="bottom", y=-0.3, x=0.0,
+            bgcolor="white", bordercolor=COLOR_BORDE_TALADRO, borderwidth=1,
+        ),
+        plot_bgcolor="white",
         margin=dict(l=10, r=10, t=40, b=10),
     )
     return fig, zonas_info
