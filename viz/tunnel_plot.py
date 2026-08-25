@@ -116,10 +116,14 @@ def _agregar_tramo_wireframe_pique(
 def _agregar_anillos_avance(
     fig: go.Figure, anillos: list[np.ndarray], vertical: bool, offset_etiqueta: float,
     etiqueta: str = "Mes", nombre_serie: str = "Avance mensual programado",
+    tonelajes: list[float] | None = None,
 ) -> None:
     """Dibuja anillos de avance (`core.geometry.anillos_de_avance_mensual*`)
     sobre la figura, con una etiqueta "{etiqueta} k" por anillo — mensual o
-    por disparo, según lo que traiga `anillos`."""
+    por disparo, según lo que traiga `anillos`. Si se pasa `tonelajes` (un
+    valor por anillo), se agrega a la etiqueta — así, si el avance mensual
+    o el tonelaje resultante cambian, el cambio se ve directamente sobre el
+    esquema 3D, no solo en la tabla de resultados."""
     if not anillos:
         return
     xs, ys, zs = _linea_con_separadores(anillos)
@@ -136,7 +140,10 @@ def _agregar_anillos_avance(
             tx.append(offset_etiqueta); ty.append(0.0); tz.append(anillo[0, 2])
         else:
             tx.append(anillo[0, 0]); ty.append(0.0); tz.append(offset_etiqueta)
-        textos.append(f"{etiqueta} {k}")
+        texto = f"{etiqueta} {k}"
+        if tonelajes is not None:
+            texto += f" · {tonelajes[k - 1]:,.0f} TM"
+        textos.append(texto)
     fig.add_trace(
         go.Scatter3d(
             x=tx, y=ty, z=tz, mode="text", text=textos,
@@ -468,7 +475,20 @@ def build_tunnel_figure_solido(
                 forma=labor.forma_seccion, avance_mensual=avance_mensual_efectivo,
             )
             offset_etiqueta = labor.alto_m + max(0.5, 0.08 * longitud_total) * 0.6
-        _agregar_anillos_avance(fig, anillos_seg, vertical, offset_etiqueta, etiqueta, nombre_serie)
+        # tonelaje por segmento = avance de ese segmento × área × densidad —
+        # solo para "mensual" (el modo "disparo" ya reporta tonelaje por
+        # disparo en la tabla de resultados, sin ambigüedad de reparto).
+        tonelajes_seg = None
+        if modo_anillos != "disparo":
+            deltas = (
+                list(avance_mensual_efectivo) if avance_mensual_efectivo
+                else [avance_proyectado / n_segmentos] * n_segmentos
+            )
+            tonelajes_seg = [d * resultado.area_m2 * resultado.densidad_usada_tm_m3 for d in deltas]
+        _agregar_anillos_avance(
+            fig, anillos_seg, vertical, offset_etiqueta, etiqueta, nombre_serie,
+            tonelajes=tonelajes_seg,
+        )
 
     if longitud_existente > 0:
         radio = labor.ancho_m / 2.0
