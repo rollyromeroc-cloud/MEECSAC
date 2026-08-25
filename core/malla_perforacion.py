@@ -15,35 +15,51 @@ distancias — no un cálculo certificado ni el criterio de campo real de
 ninguna OTS en particular (ver `core.models.LaborMinera.tipo_roca` para el
 mismo disclaimer aplicado a N.° de taladros).
 
-Burden del anillo de arranque — regla empírica de Holmberg (Holmberg,
-1982; ver también Persson, Holmberg & Lee, "Rock Blasting and Explosives
-Engineering"): para un corte con taladros de alivio de diámetro Ø
-agrupados, el diámetro equivalente del vacío es De = Ø × √n_alivio, y el
-burden máximo práctico del primer anillo es B1 = 1.5 × De.
+Burden de las zonas en anillo del corte quemado (arranque/ayuda/subayuda)
+— método de Holmberg (Holmberg, 1982; ver también Persson, Holmberg & Lee,
+"Rock Blasting and Explosives Engineering", y la tabla numérica del "cuele
+de cuatro secciones" reproducida en Jimeno, "Manual de Perforación y
+Voladura de Rocas", IGME) para un corte de barrenos paralelos:
+  - Sección 1 (arranque): con taladros de alivio de diámetro Ø agrupados,
+    el diámetro equivalente del vacío es De = Ø × √n_alivio, y el burden
+    del primer anillo es B1 = 1.5 × De.
+  - Secciones siguientes (ayuda, subayuda, ...): cada anillo abre contra
+    el "vacío" que deja el cuadrado/rombo de la sección anterior, cuyo
+    lado es a(n-1) = B(n-1) × √2 — por eso B(n) = 1.5 × a(n-1) =
+    1.5×√2 × B(n-1) ≈ 2.12 × B(n-1). Verificado contra la tabla numérica
+    de referencia (en múltiplos de Ø): B1=1.50Ø, lado1=2.12Ø, B2=3.18Ø,
+    lado2=4.50Ø, B3=6.75Ø, lado3=9.54Ø, B4=14.31Ø — cada valor es 1.5× o
+    √2× el anterior, tal como esta fórmula predice.
 
-Burden de las zonas siguientes — escalado por los factores de seguridad
-de Ojeda (2003), "Nueva teoría del burden" (IV CONEINGEMMET 2003): la
-fórmula completa de Ojeda (B = Ø×(PoD/(Fs×σr×RQD)+1)) requiere datos que
-esta app no pide todavía (presión de detonación del explosivo, resistencia
-a compresión de la roca, RQD) y su reconstrucción a partir de fuentes
-secundarias no pasó una verificación dimensional de confianza — por eso
-NO se implementa esa fórmula absoluta. Lo que sí se reutiliza, porque es
-verificable y consistente, es la tabla de factores de seguridad (Fs) por
-zona que esa misma fuente reporta — más Fs = burden más ajustado (más
-cerca del vacío), menos Fs = burden más amplio (zona de producción):
-    arranque=6, ayuda=5, subayuda=4, contorno=3, arrastre=2
-El burden de cada zona se escala desde B1 (arranque) proporcionalmente al
-cociente de factores: B_zona = B1 × (Fs_arranque / Fs_zona).
+Burden de contorno y arrastre — estas dos zonas ya no son parte del corte
+(no abren contra un vacío previo, sino que definen el perfil final y el
+piso de la labor), así que la progresión geométrica de Holmberg no aplica
+ahí. Se escalan en cambio con los factores de seguridad (Fs) de Ojeda
+(2003), "Nueva teoría del burden" (IV CONEINGEMMET 2003) — la fórmula
+completa de Ojeda (B = Ø×(PoD/(Fs×σr×RQD)+1)) requiere datos que esta app
+no pide todavía (presión de detonación del explosivo, resistencia a
+compresión de la roca, RQD) y su reconstrucción a partir de fuentes
+secundarias no pasó una verificación dimensional de confianza — por eso NO
+se implementa esa fórmula absoluta. Lo que sí se reutiliza, porque es
+verificable y consistente, es la tabla de Fs por zona que esa misma fuente
+reporta — más Fs = burden más ajustado (más cerca del vacío), menos Fs =
+burden más amplio (zona de producción): arranque=6, ayuda=5, subayuda=4,
+contorno=3, arrastre=2. El burden de contorno/arrastre se escala desde B1
+(arranque) proporcionalmente al cociente de factores:
+B_zona = B1 × (Fs_arranque / Fs_zona).
 
 Categorías de taladro:
   - "alivio": taladros sin carga, agrupados en el centro.
   - "arranque" / "ayuda" / "subayuda": anillos concéntricos de taladros
     cargados alrededor de los alivios, alternando cuadrado → rombo
-    (rotado 45°) → cuadrado, con burden creciente según la tabla de Fs.
+    (rotado 45°) → cuadrado, con burden creciente según la progresión de
+    Holmberg (B(n) = 1.5×√2 × B(n-1)).
   - "contorno": taladros a lo largo de hastiales y corona (perfil real de
     la sección), con un margen hacia adentro = burden de esa zona.
-  - "arrastre": taladros a lo largo del piso (zapatera) — mismos puntos
-    del perfil, pero por debajo de un umbral de altura.
+  - "arrastre": taladros a lo largo del piso (zapatera) — repartidos por
+    longitud de arco a lo largo del contorno CERRADO (incluye el tramo del
+    piso, que de otro modo casi no tiene vértices propios en el perfil) y
+    clasificados por debajo de un umbral de altura.
 """
 
 from __future__ import annotations
@@ -124,10 +140,25 @@ def burden_inicial_m(
 
 def burden_zona_m(burden_arranque_m: float, zona: str) -> float:
     """Burden (m) de `zona`, escalado desde el burden de arranque según
-    los factores de seguridad de Ojeda (2003) — ver docstring del módulo."""
+    los factores de seguridad de Ojeda (2003) — ver docstring del módulo.
+    Solo aplica a "contorno"/"arrastre"; las zonas en anillo del corte usan
+    `burden_siguiente_seccion_m` (progresión de Holmberg)."""
     fs_zona = FACTOR_SEGURIDAD_ZONA[zona]
     fs_arranque = FACTOR_SEGURIDAD_ZONA["arranque"]
     return burden_arranque_m * (fs_arranque / fs_zona)
+
+
+def burden_siguiente_seccion_m(
+    burden_anterior_m: float, factor: float = FACTOR_BURDEN_HOLMBERG,
+) -> float:
+    """Burden (m) de la siguiente sección del corte quemado, por el método
+    de Holmberg: la sección anterior deja un vacío cuadrado de lado
+    a = burden_anterior × √2 (diagonal del cuadrado/rombo de taladros), y
+    la nueva sección se calcula igual que la primera pero contra ese vacío:
+    B(n) = factor × a = factor × √2 × burden_anterior — ver docstring del
+    módulo para la verificación numérica contra la tabla de referencia."""
+    lado_anterior_m = burden_anterior_m * math.sqrt(2.0)
+    return factor * lado_anterior_m
 
 
 def _cluster_alivio(n: int, centro: tuple[float, float], espaciado: float) -> list[PosicionTaladro]:
@@ -169,17 +200,21 @@ def _zonas_en_anillo(
 ) -> tuple[list[PosicionTaladro], list[ZonaInfo], int]:
     """Reparte hasta 4 taladros en cada una de las zonas en anillo
     (arranque → ayuda → subayuda, alternando cuadrado/rombo), con burden
-    creciente según `burden_zona_m`. Devuelve las posiciones, la info de
-    cada zona usada y el N.° de taladros restantes (para contorno/arrastre)."""
+    creciente según la progresión de Holmberg (`burden_siguiente_seccion_m`
+    — cada sección abre contra el vacío que deja la anterior). Devuelve las
+    posiciones, la info de cada zona usada y el N.° de taladros restantes
+    (para contorno/arrastre)."""
     posiciones: list[PosicionTaladro] = []
     zonas_info: list[ZonaInfo] = []
     restantes = taladros_cargados
+    burden = burden_arranque_m
     for i, zona in enumerate(ZONAS_ANILLO):
+        if i > 0:
+            burden = burden_siguiente_seccion_m(burden)
         n_zona = min(4, restantes)
         if n_zona <= 0:
             break
         es_rombo = i % 2 == 1
-        burden = burden_zona_m(burden_arranque_m, zona)
         puntos = _anillo_cuadrado(centro, burden, 45.0 if es_rombo else 0.0)[:n_zona]
         posiciones.extend(
             PosicionTaladro(y, z, zona, anillo=i + 1) for y, z in puntos
@@ -198,23 +233,40 @@ def _zonas_en_anillo(
 def _puntos_contorno(
     forma: str | None, ancho: float, alto: float, n_puntos: int, margen: float,
 ) -> list[tuple[float, float]]:
-    """`n_puntos` equiespaciados a lo largo del perfil real de la sección,
-    desplazados `margen` metros hacia el centro (aproximación: escala el
-    perfil respecto a su propio centro geométrico, no un offset geométrico
-    exacto de curva paralela — suficiente para un margen pequeño)."""
+    """`n_puntos` equiespaciados por LONGITUD DE ARCO a lo largo del
+    contorno real y CERRADO de la sección (incluye el tramo del piso, entre
+    el último y el primer vértice del perfil — `perfil_seccion` no trae
+    vértices propios ahí, así que un reparto por índice de vértice casi
+    nunca cae en el piso y deja la zona de arrastre sin taladros;
+    repartir por longitud de arco sí le da al piso su parte proporcional
+    del perímetro). Los puntos se desplazan `margen` metros hacia el centro
+    (aproximación: escala el perfil respecto a su propio centro geométrico,
+    no un offset geométrico exacto de curva paralela — suficiente para un
+    margen pequeño)."""
     if n_puntos <= 0:
         return []
-    perfil = perfil_seccion(forma, ancho, alto, n_arco=max(24, n_puntos))
+    perfil = perfil_seccion(forma, ancho, alto, n_arco=max(24, n_puntos * 2))
     centro_y = float(np.mean(perfil[:, 0]))
     centro_z = float(np.mean(perfil[:, 1]))
     radio_medio = float(np.mean(np.hypot(perfil[:, 0] - centro_y, perfil[:, 1] - centro_z)))
     factor = max(0.0, (radio_medio - margen) / radio_medio) if radio_medio > 0 else 1.0
 
-    n_perfil = len(perfil)
-    indices = np.linspace(0, n_perfil, n_puntos, endpoint=False).astype(int) % n_perfil
+    cerrado = np.vstack([perfil, perfil[:1]])  # incluye el tramo de piso (último → primero)
+    segmentos = np.diff(cerrado, axis=0)
+    longitudes = np.hypot(segmentos[:, 0], segmentos[:, 1])
+    perimetro = float(longitudes.sum())
+    if perimetro <= 0:
+        return []
+    acumulado = np.concatenate([[0.0], np.cumsum(longitudes)])
+
     puntos = []
-    for idx in indices:
-        y, z = perfil[idx]
+    for k in range(n_puntos):
+        s = (perimetro * k) / n_puntos
+        idx = min(int(np.searchsorted(acumulado, s, side="right") - 1), len(cerrado) - 2)
+        s0, s1 = acumulado[idx], acumulado[idx + 1]
+        t = (s - s0) / (s1 - s0) if s1 > s0 else 0.0
+        y = cerrado[idx, 0] + t * (cerrado[idx + 1, 0] - cerrado[idx, 0])
+        z = cerrado[idx, 1] + t * (cerrado[idx + 1, 1] - cerrado[idx, 1])
         puntos.append((
             centro_y + (y - centro_y) * factor,
             centro_z + (z - centro_z) * factor,
