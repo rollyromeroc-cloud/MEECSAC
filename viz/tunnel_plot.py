@@ -113,12 +113,13 @@ def _agregar_tramo_wireframe_pique(
     )
 
 
-def _agregar_anillos_avance_mensual(
+def _agregar_anillos_avance(
     fig: go.Figure, anillos: list[np.ndarray], vertical: bool, offset_etiqueta: float,
+    etiqueta: str = "Mes", nombre_serie: str = "Avance mensual programado",
 ) -> None:
-    """Dibuja los anillos de avance mensual (`core.geometry.anillos_de_avance_mensual*`)
-    sobre la figura, con una etiqueta "Mes k" por anillo — para identificar
-    de un vistazo cuánto avance corresponde a cada mes de la programación."""
+    """Dibuja anillos de avance (`core.geometry.anillos_de_avance_mensual*`)
+    sobre la figura, con una etiqueta "{etiqueta} k" por anillo — mensual o
+    por disparo, según lo que traiga `anillos`."""
     if not anillos:
         return
     xs, ys, zs = _linea_con_separadores(anillos)
@@ -126,16 +127,16 @@ def _agregar_anillos_avance_mensual(
         go.Scatter3d(
             x=xs, y=ys, z=zs, mode="lines",
             line=dict(color=COLOR_ANILLO_MES, width=4, dash="dot"),
-            name="Avance mensual programado", hoverinfo="skip",
+            name=nombre_serie, hoverinfo="skip",
         )
     )
     tx, ty, tz, textos = [], [], [], []
-    for mes, anillo in enumerate(anillos, start=1):
+    for k, anillo in enumerate(anillos, start=1):
         if vertical:
             tx.append(offset_etiqueta); ty.append(0.0); tz.append(anillo[0, 2])
         else:
             tx.append(anillo[0, 0]); ty.append(0.0); tz.append(offset_etiqueta)
-        textos.append(f"Mes {mes}")
+        textos.append(f"{etiqueta} {k}")
     fig.add_trace(
         go.Scatter3d(
             x=tx, y=ty, z=tz, mode="text", text=textos,
@@ -367,13 +368,16 @@ def build_tunnel_figure_solido(
     resultado: ResultadoVoladura,
     n_anillos: int = 16,
     n_meses: int | None = None,
+    modo_anillos: str = "mensual",
 ) -> go.Figure:
     """Versión sólida y cerrada (piso/muros/arco + tapas, o cilindro para
     Pique/Chimenea) del mismo esquema, con el mismo esquema de colores
-    existente/proyectado. Si se indica `n_meses` (periodo del programa),
-    superpone un anillo punteado por cada mes de avance proyectado
-    (asumiendo avance uniforme), con su etiqueta "Mes k", para identificar
-    la programación mensual directamente sobre el sólido."""
+    existente/proyectado. `modo_anillos` = "mensual" (default, usa
+    `n_meses`/`labor.avance_mensual_m`) o "disparo" (un anillo por cada
+    disparo, `resultado.n_disparos`, espaciado uniforme
+    `labor.avance_por_disparo_m`) — superpone un anillo punteado por
+    segmento con su etiqueta, para identificar la programación
+    directamente sobre el sólido."""
     vertical = labor.tipo in LABORES_VERTICALES
     longitud_existente = max(labor.longitud_existente_m, 0.0)
     avance_proyectado = max(labor.avance_proyectado_m, 0.01)
@@ -438,25 +442,33 @@ def build_tunnel_figure_solido(
                 )
             )
 
-    # si la labor tiene un programa mensual real (ingresado mes a mes, no
-    # necesariamente uniforme), se usa tal cual en vez de asumir avance
-    # uniforme sobre datos.periodo_meses.
-    n_meses_efectivo = len(labor.avance_mensual_m) if labor.avance_mensual_m else n_meses
-    if n_meses_efectivo:
+    if modo_anillos == "disparo":
+        n_segmentos, avance_mensual_efectivo, etiqueta, nombre_serie = (
+            resultado.n_disparos, None, "Disparo", "Avance por disparo",
+        )
+    else:
+        # si la labor tiene un programa mensual real (ingresado mes a mes,
+        # no necesariamente uniforme), se usa tal cual en vez de asumir
+        # avance uniforme sobre datos.periodo_meses.
+        n_segmentos = len(labor.avance_mensual_m) if labor.avance_mensual_m else n_meses
+        avance_mensual_efectivo, etiqueta, nombre_serie = (
+            labor.avance_mensual_m, "Mes", "Avance mensual programado",
+        )
+    if n_segmentos:
         radio = labor.ancho_m / 2.0
         if vertical:
-            anillos_mes = anillos_de_avance_mensual_pique(
-                labor.ancho_m, longitud_existente, avance_proyectado, n_meses_efectivo,
-                avance_mensual=labor.avance_mensual_m,
+            anillos_seg = anillos_de_avance_mensual_pique(
+                labor.ancho_m, longitud_existente, avance_proyectado, n_segmentos,
+                avance_mensual=avance_mensual_efectivo,
             )
             offset_etiqueta = radio * 1.35
         else:
-            anillos_mes = anillos_de_avance_mensual(
-                labor.ancho_m, labor.alto_m, longitud_existente, avance_proyectado, n_meses_efectivo,
-                forma=labor.forma_seccion, avance_mensual=labor.avance_mensual_m,
+            anillos_seg = anillos_de_avance_mensual(
+                labor.ancho_m, labor.alto_m, longitud_existente, avance_proyectado, n_segmentos,
+                forma=labor.forma_seccion, avance_mensual=avance_mensual_efectivo,
             )
             offset_etiqueta = labor.alto_m + max(0.5, 0.08 * longitud_total) * 0.6
-        _agregar_anillos_avance_mensual(fig, anillos_mes, vertical, offset_etiqueta)
+        _agregar_anillos_avance(fig, anillos_seg, vertical, offset_etiqueta, etiqueta, nombre_serie)
 
     if longitud_existente > 0:
         radio = labor.ancho_m / 2.0

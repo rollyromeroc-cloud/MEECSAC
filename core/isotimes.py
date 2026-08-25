@@ -46,7 +46,14 @@ def malla_isotiempos(
     zs = np.linspace(z_min, z_max, resolucion)
     Y, Z = np.meshgrid(ys, zs)
 
+    # "linear" deja NaN fuera del casco convexo de los taladros, aunque esa
+    # zona siga dentro del contorno (p. ej. las esquinas cerca de corona o
+    # piso, más allá del taladro más externo) — se rellenan esos huecos con
+    # el valor del taladro más cercano ("nearest"), para que el mapa cubra
+    # toda la sección real, no solo el área entre taladros.
     T = griddata(puntos, valores, (Y, Z), method="linear")
+    T_nearest = griddata(puntos, valores, (Y, Z), method="nearest")
+    T = np.where(np.isnan(T), T_nearest, T)
 
     mascara = np.zeros(T.shape, dtype=bool)
     for i in range(T.shape[0]):

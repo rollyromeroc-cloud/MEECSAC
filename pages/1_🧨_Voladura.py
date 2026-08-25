@@ -345,8 +345,12 @@ with c_estilo:
 idx_esquema = nombres.index(labor_a_graficar)
 dg_esquema = st.session_state.setdefault("datos_generales", DatosGenerales())
 if estilo_esquema == "Sólido":
+    modo_anillos = st.radio(
+        "Anillos de avance", ["Mensual", "Por disparo"], key="modo_anillos_esquema", horizontal=True,
+    )
     fig_tunel = build_tunnel_figure_solido(
         labores[idx_esquema], resultados[idx_esquema], n_meses=dg_esquema.periodo_meses,
+        modo_anillos="disparo" if modo_anillos == "Por disparo" else "mensual",
     )
 else:
     fig_tunel = build_tunnel_figure(labores[idx_esquema], resultados[idx_esquema])
@@ -355,12 +359,14 @@ leyenda_esquema = (
     "🩶 Gris = tramo ya existente · 🔵 Azul = avance proyectado · "
     "línea punteada roja = frente actual"
 )
-if estilo_esquema == "Sólido":
+if estilo_esquema == "Sólido" and modo_anillos == "Mensual":
     leyenda_esquema += (
         " · línea punteada ámbar = avance mensual programado (asumiendo avance "
         f"uniforme en {dg_esquema.periodo_meses} meses — ajustable en "
         "'Datos generales del informe' más abajo)."
     )
+elif estilo_esquema == "Sólido":
+    leyenda_esquema += " · línea punteada ámbar = un anillo por cada disparo."
 else:
     leyenda_esquema += "."
 st.caption(leyenda_esquema)
