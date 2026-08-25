@@ -201,6 +201,15 @@ class DatosGenerales:
     zona_utm: int = ZONA_UTM_DEFAULT
     hemisferio: str = HEMISFERIO_DEFAULT
 
+    # Cajetín (título) del reporte — datos de control del documento, estilo
+    # plano técnico. Igual que el resto de DatosGenerales, todo opcional.
+    elaborado_por: str = ""
+    cargo_elaborado_por: str = ""
+    revisado_por: str = ""
+    aprobado_por: str = ""
+    numero_plano: str = ""
+    revision: str = ""
+
 
 @dataclass
 class PolvorinGuiaSucamec:

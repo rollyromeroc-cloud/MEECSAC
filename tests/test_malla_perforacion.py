@@ -4,8 +4,9 @@ import pytest
 
 from core.malla_perforacion import (
     FACTOR_BURDEN_HOLMBERG,
-    MARGEN_CONTORNO_DEFAULT_M,
+    FACTOR_SEGURIDAD_ZONA,
     burden_inicial_m,
+    burden_zona_m,
     generar_malla_perforacion,
 )
 
@@ -20,6 +21,18 @@ def test_burden_inicial_sin_alivio_no_falla():
     assert burden_inicial_m(diametro_alivio_mm=36.0, n_alivio=0) > 0
 
 
+def test_burden_zona_escala_por_factor_de_seguridad_ojeda():
+    b1 = 0.076
+    assert burden_zona_m(b1, "arranque") == pytest.approx(b1)
+    assert burden_zona_m(b1, "ayuda") == pytest.approx(b1 * 6.0 / 5.0)
+    assert burden_zona_m(b1, "subayuda") == pytest.approx(b1 * 6.0 / 4.0)
+    assert burden_zona_m(b1, "contorno") == pytest.approx(b1 * 6.0 / 3.0)
+    assert burden_zona_m(b1, "arrastre") == pytest.approx(b1 * 6.0 / 2.0)
+    # burden creciente a medida que se aleja del arranque (menos Fs = más burden)
+    burdens = [burden_zona_m(b1, z) for z in ("arranque", "ayuda", "subayuda", "contorno", "arrastre")]
+    assert burdens == sorted(burdens)
+
+
 def test_genera_el_total_correcto_de_taladros():
     malla, _ = generar_malla_perforacion(
         ancho=1.77, alto=1.10, taladros_cargados=23, taladros_alivio=2,
@@ -27,35 +40,38 @@ def test_genera_el_total_correcto_de_taladros():
     )
     assert len(malla) == 23 + 2
     n_alivio = sum(1 for t in malla if t.categoria == "alivio")
-    n_arranque = sum(1 for t in malla if t.categoria == "arranque")
-    n_contorno = sum(1 for t in malla if t.categoria == "contorno")
+    n_resto = sum(1 for t in malla if t.categoria != "alivio")
     assert n_alivio == 2
-    assert n_arranque + n_contorno == 23
+    assert n_resto == 23
 
 
-def test_arranque_no_supera_8_el_resto_va_a_contorno():
-    malla, anillos = generar_malla_perforacion(
+def test_asigna_hasta_4_taladros_por_zona_en_anillo_antes_de_contorno():
+    malla, zonas = generar_malla_perforacion(
         ancho=2.00, alto=2.00, taladros_cargados=20, taladros_alivio=2,
         diametro_barreno_mm=36.0, forma_seccion="Baúl (hastiales rectos)",
     )
     n_arranque = sum(1 for t in malla if t.categoria == "arranque")
-    n_contorno = sum(1 for t in malla if t.categoria == "contorno")
-    assert n_arranque == 8
-    assert n_contorno == 12
-    assert len(anillos) == 2
+    n_ayuda = sum(1 for t in malla if t.categoria == "ayuda")
+    n_subayuda = sum(1 for t in malla if t.categoria == "subayuda")
+    n_contorno_arrastre = sum(1 for t in malla if t.categoria in ("contorno", "arrastre"))
+    assert n_arranque == 4
+    assert n_ayuda == 4
+    assert n_subayuda == 4
+    assert n_contorno_arrastre == 8  # 20 - 12
+    zonas_por_nombre = {z.zona: z for z in zonas}
+    assert set(zonas_por_nombre) == {"Arranque", "Ayuda", "Subayuda", "Contorno", "Arrastre"}
 
 
-def test_pocos_taladros_cargados_sin_contorno():
-    malla, anillos = generar_malla_perforacion(
+def test_pocos_taladros_cargados_solo_arranque():
+    malla, zonas = generar_malla_perforacion(
         ancho=1.20, alto=1.20, taladros_cargados=3, taladros_alivio=1,
         diametro_barreno_mm=36.0, forma_seccion="Baúl (hastiales rectos)",
     )
     n_arranque = sum(1 for t in malla if t.categoria == "arranque")
-    n_contorno = sum(1 for t in malla if t.categoria == "contorno")
     assert n_arranque == 3
-    assert n_contorno == 0
-    assert len(anillos) == 1
-    assert anillos[0].n_taladros == 3
+    assert len(zonas) == 1
+    assert zonas[0].zona == "Arranque"
+    assert zonas[0].n_taladros == 3
 
 
 def test_alivio_unico_queda_en_el_centro():
@@ -68,25 +84,25 @@ def test_alivio_unico_queda_en_el_centro():
     assert alivio.z == pytest.approx(0.55)  # alto / 2
 
 
-def test_anillos_de_arranque_alternan_cuadrado_y_rombo_con_burden_real():
+def test_zonas_en_anillo_alternan_cuadrado_y_rombo_con_burden_creciente():
     diametro_barreno = 36.0
     n_alivio = 2
-    malla, anillos = generar_malla_perforacion(
-        ancho=2.00, alto=2.00, taladros_cargados=8, taladros_alivio=n_alivio,
+    malla, zonas = generar_malla_perforacion(
+        ancho=2.00, alto=2.00, taladros_cargados=12, taladros_alivio=n_alivio,
         diametro_barreno_mm=diametro_barreno, forma_seccion="Baúl (hastiales rectos)",
     )
-    assert [a.forma for a in anillos] == ["Cuadrado", "Rombo"]
-    assert [a.n_taladros for a in anillos] == [4, 4]
+    assert [z.zona for z in zonas[:3]] == ["Arranque", "Ayuda", "Subayuda"]
+    assert [z.forma for z in zonas[:3]] == ["Cuadrado", "Rombo", "Cuadrado"]
+    assert [z.n_taladros for z in zonas[:3]] == [4, 4, 4]
 
     b1_esperado_mm = burden_inicial_m(diametro_barreno, n_alivio) * 1000.0
-    assert anillos[0].burden_mm == pytest.approx(b1_esperado_mm)
-    assert anillos[1].burden_mm == pytest.approx(b1_esperado_mm * math.sqrt(2.0))
-    # lado = burden * sqrt(2), mismo factor para cuadrado y rombo (misma
-    # forma geométrica, solo rotada 45°)
-    assert anillos[0].lado_mm == pytest.approx(anillos[0].burden_mm * math.sqrt(2.0))
+    assert zonas[0].burden_mm == pytest.approx(b1_esperado_mm)
+    assert zonas[1].burden_mm == pytest.approx(b1_esperado_mm * 6.0 / 5.0)
+    assert zonas[2].burden_mm == pytest.approx(b1_esperado_mm * 6.0 / 4.0)
+    assert zonas[0].lado_mm == pytest.approx(zonas[0].burden_mm * math.sqrt(2.0))
 
-    anillo_1 = [t for t in malla if t.categoria == "arranque" and t.anillo == 1]
-    anillo_2 = [t for t in malla if t.categoria == "arranque" and t.anillo == 2]
+    anillo_1 = [t for t in malla if t.categoria == "arranque"]
+    anillo_2 = [t for t in malla if t.categoria == "ayuda"]
     centro_z = 1.0
     # anillo 1 (cuadrado, rotación 0°): un punto debe caer sobre el eje y
     # (z == centro) — a diferencia del anillo 2 (rombo, rotado 45°).
@@ -95,15 +111,30 @@ def test_anillos_de_arranque_alternan_cuadrado_y_rombo_con_burden_real():
 
 
 def test_diametro_alivio_por_defecto_usa_el_del_barreno():
-    malla_a, anillos_a = generar_malla_perforacion(
+    _, zonas_a = generar_malla_perforacion(
         ancho=2.00, alto=2.00, taladros_cargados=4, taladros_alivio=2,
         diametro_barreno_mm=36.0, forma_seccion="Baúl (hastiales rectos)",
     )
-    malla_b, anillos_b = generar_malla_perforacion(
+    _, zonas_b = generar_malla_perforacion(
         ancho=2.00, alto=2.00, taladros_cargados=4, taladros_alivio=2,
         diametro_barreno_mm=36.0, diametro_alivio_mm=36.0, forma_seccion="Baúl (hastiales rectos)",
     )
-    assert anillos_a[0].burden_mm == pytest.approx(anillos_b[0].burden_mm)
+    assert zonas_a[0].burden_mm == pytest.approx(zonas_b[0].burden_mm)
+
+
+def test_arrastre_queda_cerca_del_piso_y_contorno_por_encima_del_umbral():
+    ancho, alto = 2.20, 1.55
+    forma = "Baúl (hastiales rectos)"
+    malla, _ = generar_malla_perforacion(
+        ancho=ancho, alto=alto, taladros_cargados=24, taladros_alivio=2,
+        diametro_barreno_mm=36.0, forma_seccion=forma,
+    )
+    umbral = 0.2 * alto
+    arrastre = [t for t in malla if t.categoria == "arrastre"]
+    contorno = [t for t in malla if t.categoria == "contorno"]
+    assert arrastre  # con 24 taladros cargados, sobran suficientes para llegar al piso
+    assert all(t.z < umbral for t in arrastre)
+    assert all(t.z >= umbral for t in contorno)
 
 
 def test_puntos_de_contorno_quedan_dentro_del_perfil_real():
@@ -112,22 +143,27 @@ def test_puntos_de_contorno_quedan_dentro_del_perfil_real():
     ancho, alto = 2.20, 1.55
     forma = "Baúl (hastiales rectos)"
     malla, _ = generar_malla_perforacion(
-        ancho=ancho, alto=alto, taladros_cargados=20, taladros_alivio=2,
+        ancho=ancho, alto=alto, taladros_cargados=24, taladros_alivio=2,
         diametro_barreno_mm=36.0, forma_seccion=forma,
     )
-    contorno = [t for t in malla if t.categoria == "contorno"]
-    assert len(contorno) > 0
+    perimetro_holes = [t for t in malla if t.categoria in ("contorno", "arrastre")]
+    assert perimetro_holes
 
     perfil = perfil_seccion(forma, ancho, alto)
     centro_y = perfil[:, 0].mean()
     centro_z = perfil[:, 1].mean()
     radio_perfil_max = max(math.hypot(y - centro_y, z - centro_z) for y, z in perfil)
 
-    for t in contorno:
+    for t in perimetro_holes:
         radio_taladro = math.hypot(t.y - centro_y, t.z - centro_z)
         assert radio_taladro < radio_perfil_max  # con margen hacia adentro
 
 
-def test_margen_contorno_y_factor_holmberg_por_defecto_son_positivos():
-    assert MARGEN_CONTORNO_DEFAULT_M > 0
+def test_factor_burden_holmberg_y_tabla_de_seguridad_son_positivos():
     assert FACTOR_BURDEN_HOLMBERG > 0
+    assert all(v > 0 for v in FACTOR_SEGURIDAD_ZONA.values())
+    # a menor Fs, mayor burden relativo — la tabla debe ser monótona en el
+    # orden esperado del round (arranque -> ayuda -> subayuda -> contorno -> arrastre)
+    orden = ["arranque", "ayuda", "subayuda", "contorno", "arrastre"]
+    valores = [FACTOR_SEGURIDAD_ZONA[z] for z in orden]
+    assert valores == sorted(valores, reverse=True)

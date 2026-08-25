@@ -105,6 +105,27 @@ def _add_title_page(document: Document, titulo: str, subtitulo: str = "") -> Non
     document.add_paragraph("")
 
 
+def _add_cajetin(document: Document, datos: DatosGenerales) -> None:
+    """Cajetín (bloque de control) del reporte, estilo plano técnico:
+    elaborado por, cargo, revisado por, aprobado por, N.° de plano y
+    revisión. Solo se agrega si el usuario completó al menos un campo —
+    de lo contrario sería una tabla vacía sin valor informativo."""
+    campos = [
+        ["Elaborado por", datos.elaborado_por],
+        ["Cargo / área", datos.cargo_elaborado_por],
+        ["Revisado por", datos.revisado_por],
+        ["Aprobado por", datos.aprobado_por],
+        ["N.° de plano", datos.numero_plano],
+        ["Revisión", datos.revision],
+    ]
+    if not any(valor for _, valor in campos):
+        return
+    document.add_heading("Cajetín", level=2)
+    campos.append(["Fecha", _dt.date.today().isoformat()])
+    _add_table(document, ["Campo", "Valor"], campos)
+    document.add_paragraph("")
+
+
 def _add_encabezado_informe(document: Document, datos: DatosGenerales, titulo_proyecto: str) -> None:
     """Portada del informe técnico: nombre de la concesión/proyecto, código,
     empresa, RUC, ubicación y fecha — replica el bloque de encabezado de un
@@ -449,6 +470,7 @@ def build_voladura_report(
     document = Document()
 
     _add_encabezado_informe(document, datos, titulo_proyecto)
+    _add_cajetin(document, datos)
     document.add_heading("PROGRAMA DE AVANCES DE LABORES", level=1)
 
     document.add_heading("Introducción", level=1)

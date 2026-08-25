@@ -1,6 +1,6 @@
 """Esquema 2D de la malla de perforación (cara del frente) de una labor
-minera — alivios, anillos de arranque (cuadrado→rombo, con cotas de burden
-en mm) y contorno, sobre el perfil real de la sección. Ver
+minera — alivios, zonas en anillo (arranque→ayuda→subayuda, con cotas de
+burden en mm) y contorno/arrastre, sobre el perfil real de la sección. Ver
 `core.malla_perforacion` para la geometría y las distancias.
 """
 
@@ -9,17 +9,38 @@ from __future__ import annotations
 import plotly.graph_objects as go
 
 from core.geometry import perfil_seccion
-from core.malla_perforacion import AnilloInfo, PosicionTaladro, generar_malla_perforacion
+from core.malla_perforacion import PosicionTaladro, ZonaInfo, ZONAS_ANILLO, generar_malla_perforacion
 
 COLOR_CONTORNO_PERFIL = "#444444"
 COLOR_ALIVIO = "#882255"
 COLOR_ARRANQUE = "#44AA99"
+COLOR_AYUDA = "#88CCEE"
+COLOR_SUBAYUDA = "#DDCC77"
 COLOR_CONTORNO_TALADRO = "#117733"
+COLOR_ARRASTRE = "#CC6677"
 COLOR_COTA_ANILLO = "#AA4499"
 
-_NOMBRE_CATEGORIA = {"alivio": "Alivio (sin carga)", "arranque": "Arranque/ayuda", "contorno": "Contorno"}
-_COLOR_CATEGORIA = {"alivio": COLOR_ALIVIO, "arranque": COLOR_ARRANQUE, "contorno": COLOR_CONTORNO_TALADRO}
-_SIMBOLO_CATEGORIA = {"alivio": "circle-open", "arranque": "circle", "contorno": "circle"}
+_NOMBRE_CATEGORIA = {
+    "alivio": "Alivio (sin carga)",
+    "arranque": "Arranque",
+    "ayuda": "Ayuda",
+    "subayuda": "Subayuda",
+    "contorno": "Contorno",
+    "arrastre": "Arrastre (zapatera)",
+}
+_COLOR_CATEGORIA = {
+    "alivio": COLOR_ALIVIO,
+    "arranque": COLOR_ARRANQUE,
+    "ayuda": COLOR_AYUDA,
+    "subayuda": COLOR_SUBAYUDA,
+    "contorno": COLOR_CONTORNO_TALADRO,
+    "arrastre": COLOR_ARRASTRE,
+}
+_SIMBOLO_CATEGORIA = {
+    "alivio": "circle-open", "arranque": "circle", "ayuda": "circle",
+    "subayuda": "circle", "contorno": "circle", "arrastre": "square",
+}
+_ORDEN_CATEGORIAS = ("alivio", "arranque", "ayuda", "subayuda", "contorno", "arrastre")
 
 
 def build_malla_perforacion_figure(
@@ -31,14 +52,14 @@ def build_malla_perforacion_figure(
     diametro_alivio_mm: float | None = None,
     forma_seccion: str | None = None,
     nombre_labor: str = "",
-) -> tuple[go.Figure, list[AnilloInfo]]:
+) -> tuple[go.Figure, list[ZonaInfo]]:
     """Figura 2D (contorno de la sección + posiciones de taladro por
-    categoría, con la cota de burden de cada anillo de arranque) lista para
-    `st.plotly_chart`, junto con las distancias de cada anillo (para
+    categoría, con la cota de burden de cada zona en anillo) lista para
+    `st.plotly_chart`, junto con las distancias de cada zona (para
     mostrarlas también en una tabla)."""
     malla: list[PosicionTaladro]
-    anillos_info: list[AnilloInfo]
-    malla, anillos_info = generar_malla_perforacion(
+    zonas_info: list[ZonaInfo]
+    malla, zonas_info = generar_malla_perforacion(
         ancho, alto, taladros_cargados, taladros_alivio,
         diametro_barreno_mm=diametro_barreno_mm, diametro_alivio_mm=diametro_alivio_mm,
         forma_seccion=forma_seccion,
@@ -57,7 +78,7 @@ def build_malla_perforacion_figure(
         )
     )
 
-    for categoria in ("alivio", "arranque", "contorno"):
+    for categoria in _ORDEN_CATEGORIAS:
         puntos = [t for t in malla if t.categoria == categoria]
         if not puntos:
             continue
@@ -67,26 +88,23 @@ def build_malla_perforacion_figure(
                 y=[t.z for t in puntos],
                 mode="markers",
                 marker=dict(
-                    size=14, color=_COLOR_CATEGORIA[categoria], symbol=_SIMBOLO_CATEGORIA[categoria],
+                    size=13, color=_COLOR_CATEGORIA[categoria], symbol=_SIMBOLO_CATEGORIA[categoria],
                     line=dict(width=2, color=_COLOR_CATEGORIA[categoria]),
                 ),
                 name=f"{_NOMBRE_CATEGORIA[categoria]} ({len(puntos)})",
-                hovertext=[
-                    f"{_NOMBRE_CATEGORIA[categoria]} — anillo {t.anillo}" if t.anillo else _NOMBRE_CATEGORIA[categoria]
-                    for t in puntos
-                ],
+                hovertext=[_NOMBRE_CATEGORIA[categoria] for _ in puntos],
                 hoverinfo="text",
             )
         )
 
     centro_y, centro_z = 0.0, alto / 2.0
-    for info in anillos_info:
-        # etiqueta de cota (burden en mm) sobre el eje +y del anillo, como
-        # las cotas numéricas de un software de diseño de malla
+    for info in zonas_info:
+        if info.zona.lower() not in ZONAS_ANILLO:
+            continue
         radio_m = info.burden_mm / 1000.0
         fig.add_annotation(
             x=centro_y + radio_m, y=centro_z,
-            text=f"B{info.anillo}: {info.burden_mm:.0f} mm",
+            text=f"{info.zona}: {info.burden_mm:.0f} mm",
             showarrow=False, yshift=12,
             font=dict(color=COLOR_COTA_ANILLO, size=10),
         )
@@ -96,7 +114,7 @@ def build_malla_perforacion_figure(
         title=titulo,
         xaxis=dict(title="", showgrid=False, zeroline=False, scaleanchor="y", scaleratio=1),
         yaxis=dict(title="", showgrid=False, zeroline=False),
-        legend=dict(orientation="h", yanchor="bottom", y=-0.2, x=0.0),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.25, x=0.0),
         margin=dict(l=10, r=10, t=40, b=10),
     )
-    return fig, anillos_info
+    return fig, zonas_info

@@ -361,30 +361,34 @@ st.caption(leyenda_esquema)
 
 st.header(":material/grid_on: Malla de perforación", divider="gray")
 st.caption(
-    "Plantilla paramétrica de corte quemado (alivios al centro, anillos de "
-    "arranque cuadrado→rombo, contorno sobre la sección real) escalada "
-    "según el ancho/alto de la labor — una estimación visual de referencia, "
-    "no el diseño de malla real de campo."
+    "Plantilla paramétrica de un round completo (alivios al centro, zonas "
+    "en anillo arranque→ayuda→subayuda, contorno y arrastre sobre la "
+    "sección real) — una estimación visual de referencia, no el diseño de "
+    "malla real de campo. El burden de arranque usa la regla empírica de "
+    "Holmberg (B₁ = 1.5 × Ø_alivio × √N.° alivios); el de las demás zonas "
+    "se escala desde B₁ con los factores de seguridad de Ojeda (2003) "
+    "— arranque 6, ayuda 5, subayuda 4, contorno 3, arrastre 2."
 )
 labor_malla = labores[idx_esquema]
 forma_malla = "Circular" if labor_malla.tipo in LABORES_VERTICALES else labor_malla.forma_seccion
 alto_malla = labor_malla.ancho_m if labor_malla.tipo in LABORES_VERTICALES else labor_malla.alto_m
-fig_malla, anillos_malla = build_malla_perforacion_figure(
+fig_malla, zonas_malla = build_malla_perforacion_figure(
     labor_malla.ancho_m, alto_malla, labor_malla.taladros_cargados, labor_malla.taladros_alivio,
     diametro_barreno_mm=labor_malla.diametro_barreno_mm, diametro_alivio_mm=labor_malla.diametro_alivio_mm,
     forma_seccion=forma_malla, nombre_labor=labor_malla.nombre,
 )
 st.plotly_chart(fig_malla, use_container_width=True)
-if anillos_malla:
-    st.caption("Distancias de los anillos de arranque (burden = regla de Holmberg, B₁ = 1.5 × Ø_alivio × √N.° alivios):")
+if zonas_malla:
+    st.caption("Distancias por zona (burden y, en zonas de arranque/ayuda/subayuda, lado del anillo):")
     st.dataframe(
         pd.DataFrame(
             [
                 {
-                    "Anillo": a.anillo, "Forma": a.forma, "N.° taladros": a.n_taladros,
-                    "Burden (mm)": round(a.burden_mm, 1), "Lado (mm)": round(a.lado_mm, 1),
+                    "Zona": z.zona, "Forma": z.forma or "—", "N.° taladros": z.n_taladros,
+                    "Burden (mm)": round(z.burden_mm, 1),
+                    "Lado (mm)": round(z.lado_mm, 1) if z.lado_mm is not None else None,
                 }
-                for a in anillos_malla
+                for z in zonas_malla
             ]
         ),
         use_container_width=True, hide_index=True,
@@ -622,6 +626,17 @@ with st.expander("Datos generales del informe (opcional)", icon=":material/badge
         dg.zona_utm = st.number_input("Zona UTM", min_value=1, max_value=60, value=dg.zona_utm)
     with c4:
         dg.hemisferio = st.selectbox("Hemisferio", ["S", "N"], index=0 if dg.hemisferio == "S" else 1)
+
+    st.caption("Cajetín del reporte — datos de control del documento.")
+    c5, c6 = st.columns(2)
+    with c5:
+        dg.elaborado_por = st.text_input("Elaborado por", value=dg.elaborado_por)
+        dg.cargo_elaborado_por = st.text_input("Cargo / área", value=dg.cargo_elaborado_por)
+        dg.revisado_por = st.text_input("Revisado por", value=dg.revisado_por)
+        dg.aprobado_por = st.text_input("Aprobado por", value=dg.aprobado_por)
+    with c6:
+        dg.numero_plano = st.text_input("N.° de plano", value=dg.numero_plano)
+        dg.revision = st.text_input("Revisión", value=dg.revision, placeholder="0")
 
 estilo_reporte = "solido" if estilo_esquema == "Sólido" else "wireframe"
 buffer = build_voladura_report(

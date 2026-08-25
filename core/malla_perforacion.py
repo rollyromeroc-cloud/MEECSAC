@@ -1,6 +1,7 @@
 """Malla de perforación 2D (posiciones de cada taladro en la cara del
-frente), para visualizar y exportar el patrón de un corte quemado en
-cuadrado/rombo expandido alrededor de los alivios centrales.
+frente), para visualizar y exportar el patrón de un corte quemado con las
+5 zonas estándar de un round de voladura: arranque, ayuda, subayuda,
+contorno (hastiales/corona) y arrastre (zapatera).
 
 Es una PLANTILLA PARAMÉTRICA — un patrón clásico de corte quemado (burn
 cut) escalado y rotado según la sección real de la labor (ancho, alto,
@@ -9,32 +10,40 @@ específica por taladro, tiempos de encendido ni condiciones de roca más
 allá del criterio general que ya existe en `core.voladura.
 taladros_desde_roca`). El objetivo es una malla dimensionalmente coherente
 y reconocible por un perforista — imitando software de diseño de mallas
-tipo JKSimBlast/XSiteBlast en la FORMA de calcular distancias — no un
-cálculo certificado ni el criterio de campo real de ninguna OTS en
-particular (ver `core.models.LaborMinera.tipo_roca` para el mismo
-disclaimer aplicado a N.° de taladros).
+tipo JKSimBlast/XSiteBlast/DIMAP en la FORMA de calcular y mostrar
+distancias — no un cálculo certificado ni el criterio de campo real de
+ninguna OTS en particular (ver `core.models.LaborMinera.tipo_roca` para el
+mismo disclaimer aplicado a N.° de taladros).
 
-El burden del primer anillo de arranque se calcula con la regla empírica
-de Holmberg (Holmberg, 1982; ver también Persson, Holmberg & Lee, "Rock
-Blasting and Explosives Engineering"): para un corte con taladros de
-alivio de diámetro Ø agrupados, el diámetro equivalente del vacío es
-De = Ø × √n_alivio, y el burden máximo práctico del primer anillo es
-B1 = 1.5 × De. Los anillos siguientes (cuadrado → rombo → cuadrado...)
-crecen en progresión B(i) = B1 × √2^(i-1) — la progresión estándar de un
-corte en espiral cuadrado, donde cada anillo mantiene la misma proporción
-burden/lado que el anterior, solo rotado 45°.
+Burden del anillo de arranque — regla empírica de Holmberg (Holmberg,
+1982; ver también Persson, Holmberg & Lee, "Rock Blasting and Explosives
+Engineering"): para un corte con taladros de alivio de diámetro Ø
+agrupados, el diámetro equivalente del vacío es De = Ø × √n_alivio, y el
+burden máximo práctico del primer anillo es B1 = 1.5 × De.
+
+Burden de las zonas siguientes — escalado por los factores de seguridad
+de Ojeda (2003), "Nueva teoría del burden" (IV CONEINGEMMET 2003): la
+fórmula completa de Ojeda (B = Ø×(PoD/(Fs×σr×RQD)+1)) requiere datos que
+esta app no pide todavía (presión de detonación del explosivo, resistencia
+a compresión de la roca, RQD) y su reconstrucción a partir de fuentes
+secundarias no pasó una verificación dimensional de confianza — por eso
+NO se implementa esa fórmula absoluta. Lo que sí se reutiliza, porque es
+verificable y consistente, es la tabla de factores de seguridad (Fs) por
+zona que esa misma fuente reporta — más Fs = burden más ajustado (más
+cerca del vacío), menos Fs = burden más amplio (zona de producción):
+    arranque=6, ayuda=5, subayuda=4, contorno=3, arrastre=2
+El burden de cada zona se escala desde B1 (arranque) proporcionalmente al
+cociente de factores: B_zona = B1 × (Fs_arranque / Fs_zona).
 
 Categorías de taladro:
-  - "alivio": taladros sin carga, agrupados en el centro — dan espacio
-    libre para que rompa el corte.
-  - "arranque": anillos concéntricos de taladros cargados alrededor de los
-    alivios, alternando cuadrado → rombo (rotado 45°) → cuadrado → ...
-  - "contorno": el resto de taladros cargados, distribuidos a lo largo del
-    perfil real de la sección (ver `core.geometry.perfil_seccion`), con un
-    pequeño margen hacia adentro desde la pared.
-
-No se modela la zapatera (piso) como categoría aparte — sus taladros
-quedan incluidos en "contorno".
+  - "alivio": taladros sin carga, agrupados en el centro.
+  - "arranque" / "ayuda" / "subayuda": anillos concéntricos de taladros
+    cargados alrededor de los alivios, alternando cuadrado → rombo
+    (rotado 45°) → cuadrado, con burden creciente según la tabla de Fs.
+  - "contorno": taladros a lo largo de hastiales y corona (perfil real de
+    la sección), con un margen hacia adentro = burden de esa zona.
+  - "arrastre": taladros a lo largo del piso (zapatera) — mismos puntos
+    del perfil, pero por debajo de un umbral de altura.
 """
 
 from __future__ import annotations
@@ -46,34 +55,45 @@ import numpy as np
 
 from core.geometry import perfil_seccion
 
-MARGEN_CONTORNO_DEFAULT_M = 0.10
 FACTOR_BURDEN_HOLMBERG = 1.5  # B1 = FACTOR_BURDEN_HOLMBERG × diámetro equivalente del vacío
-FACTOR_EXPANSION_ANILLO = math.sqrt(2.0)  # progresión clásica cuadrado→rombo
+
+# Factores de seguridad (Fs) por zona — Ojeda (2003), "Nueva teoría del
+# burden" (IV CONEINGEMMET). El burden de cada zona es proporcional al
+# inverso de su Fs respecto al de arranque (ver docstring del módulo).
+FACTOR_SEGURIDAD_ZONA = {
+    "arranque": 6.0,
+    "ayuda": 5.0,
+    "subayuda": 4.0,
+    "contorno": 3.0,
+    "arrastre": 2.0,
+}
+ZONAS_ANILLO = ("arranque", "ayuda", "subayuda")  # zonas en anillos concéntricos, en orden
+UMBRAL_ARRASTRE_FRACCION_ALTO = 0.2  # puntos del perfil con z < este × alto → arrastre (zapatera)
 
 
 @dataclass
 class PosicionTaladro:
     y: float
     z: float
-    categoria: str  # "alivio" | "arranque" | "contorno"
-    anillo: int = 0  # 0 = alivio; 1, 2, 3... = anillo de arranque (0 si es contorno)
+    categoria: str  # "alivio" | "arranque" | "ayuda" | "subayuda" | "contorno" | "arrastre"
+    anillo: int = 0  # 1, 2, 3 para las zonas en anillo (arranque/ayuda/subayuda); 0 en las demás
 
 
 @dataclass
-class AnilloInfo:
-    """Distancias de un anillo de arranque — análogo a las cotas que
-    muestra un software de diseño de malla tipo JKSimBlast/XSiteBlast."""
-    anillo: int
-    forma: str  # "Cuadrado" | "Rombo"
+class ZonaInfo:
+    """Distancias de una zona de la malla — análogo a las cotas y tablas
+    que muestra un software de diseño de malla tipo JKSimBlast/DIMAP."""
+    zona: str
     n_taladros: int
-    burden_mm: float  # distancia del centro del corte a cada taladro del anillo
-    lado_mm: float  # distancia entre dos taladros adyacentes del mismo anillo
+    burden_mm: float
+    lado_mm: float | None = None  # solo aplica a zonas en anillo (cuadrado/rombo)
+    forma: str | None = None  # "Cuadrado" | "Rombo" | None
 
 
 def burden_inicial_m(
     diametro_alivio_mm: float, n_alivio: int, factor: float = FACTOR_BURDEN_HOLMBERG,
 ) -> float:
-    """Burden (m) del primer anillo de arranque, por la regla empírica de
+    """Burden (m) del anillo de arranque, por la regla empírica de
     Holmberg: B1 = factor × (Ø_alivio × √n_alivio). Si no hay taladros de
     alivio (n_alivio <= 0), no hay vacío que abra el corte — se devuelve
     directamente `diametro_alivio_mm` convertido a metros como aproximación
@@ -82,6 +102,14 @@ def burden_inicial_m(
         return max(diametro_alivio_mm, 1.0) / 1000.0
     diametro_equivalente_mm = diametro_alivio_mm * math.sqrt(n_alivio)
     return (factor * diametro_equivalente_mm) / 1000.0
+
+
+def burden_zona_m(burden_arranque_m: float, zona: str) -> float:
+    """Burden (m) de `zona`, escalado desde el burden de arranque según
+    los factores de seguridad de Ojeda (2003) — ver docstring del módulo."""
+    fs_zona = FACTOR_SEGURIDAD_ZONA[zona]
+    fs_arranque = FACTOR_SEGURIDAD_ZONA["arranque"]
+    return burden_arranque_m * (fs_arranque / fs_zona)
 
 
 def _cluster_alivio(n: int, centro: tuple[float, float], espaciado: float) -> list[PosicionTaladro]:
@@ -118,38 +146,35 @@ def _anillo_cuadrado(centro: tuple[float, float], radio: float, rotacion_deg: fl
     return puntos
 
 
-def _anillos_arranque(
-    n_taladros: int, centro: tuple[float, float], radio_inicial: float,
-) -> tuple[list[PosicionTaladro], list[AnilloInfo]]:
-    """Distribuye `n_taladros` en anillos de 4 (cuadrado, rombo, cuadrado...)
-    con burden creciente en progresión √2 (ver docstring del módulo) — el
-    excedente que no completa un anillo de 4 se reparte en un anillo final
-    con ese mismo radio. Devuelve las posiciones y, por separado, las
-    distancias de cada anillo (burden y lado) en milímetros."""
+def _zonas_en_anillo(
+    taladros_cargados: int, centro: tuple[float, float], burden_arranque_m: float,
+) -> tuple[list[PosicionTaladro], list[ZonaInfo], int]:
+    """Reparte hasta 4 taladros en cada una de las zonas en anillo
+    (arranque → ayuda → subayuda, alternando cuadrado/rombo), con burden
+    creciente según `burden_zona_m`. Devuelve las posiciones, la info de
+    cada zona usada y el N.° de taladros restantes (para contorno/arrastre)."""
     posiciones: list[PosicionTaladro] = []
-    anillos_info: list[AnilloInfo] = []
-    restantes = n_taladros
-    anillo = 1
-    radio = radio_inicial
-    while restantes > 0:
-        es_rombo = anillo % 2 == 0
-        rotacion = 45.0 if es_rombo else 0.0
-        n_en_anillo = min(4, restantes)
-        puntos = _anillo_cuadrado(centro, radio, rotacion)[:n_en_anillo]
+    zonas_info: list[ZonaInfo] = []
+    restantes = taladros_cargados
+    for i, zona in enumerate(ZONAS_ANILLO):
+        n_zona = min(4, restantes)
+        if n_zona <= 0:
+            break
+        es_rombo = i % 2 == 1
+        burden = burden_zona_m(burden_arranque_m, zona)
+        puntos = _anillo_cuadrado(centro, burden, 45.0 if es_rombo else 0.0)[:n_zona]
         posiciones.extend(
-            PosicionTaladro(y, z, "arranque", anillo=anillo) for y, z in puntos
+            PosicionTaladro(y, z, zona, anillo=i + 1) for y, z in puntos
         )
-        anillos_info.append(AnilloInfo(
-            anillo=anillo,
+        zonas_info.append(ZonaInfo(
+            zona=zona.capitalize(),
+            n_taladros=n_zona,
+            burden_mm=burden * 1000.0,
+            lado_mm=burden * math.sqrt(2.0) * 1000.0,
             forma="Rombo" if es_rombo else "Cuadrado",
-            n_taladros=n_en_anillo,
-            burden_mm=radio * 1000.0,
-            lado_mm=radio * math.sqrt(2.0) * 1000.0,
         ))
-        restantes -= n_en_anillo
-        radio *= FACTOR_EXPANSION_ANILLO
-        anillo += 1
-    return posiciones, anillos_info
+        restantes -= n_zona
+    return posiciones, zonas_info, restantes
 
 
 def _puntos_contorno(
@@ -187,35 +212,45 @@ def generar_malla_perforacion(
     diametro_barreno_mm: float,
     diametro_alivio_mm: float | None = None,
     forma_seccion: str | None = None,
-    margen_contorno_m: float = MARGEN_CONTORNO_DEFAULT_M,
-) -> tuple[list[PosicionTaladro], list[AnilloInfo]]:
-    """Genera la malla completa: alivios al centro, anillos de arranque
-    (cuadrado→rombo expandido, burden real vía `burden_inicial_m`) y el
-    resto de taladros cargados repartidos en el contorno real de la
-    sección. `diametro_alivio_mm` por defecto usa el mismo diámetro que
-    `diametro_barreno_mm` — en perforación manual (Jack Leg) sin broca de
-    rimado especial, los taladros de alivio suelen perforarse con la misma
-    broca, solo se dejan sin cargar; si se usa una broca de mayor diámetro
-    para el alivio, indícalo aquí.
+) -> tuple[list[PosicionTaladro], list[ZonaInfo]]:
+    """Genera la malla completa: alivios al centro, zonas en anillo
+    (arranque→ayuda→subayuda) y el resto de taladros cargados repartidos
+    entre contorno (hastiales/corona) y arrastre (zapatera) sobre el
+    perfil real de la sección. `diametro_alivio_mm` por defecto usa el
+    mismo diámetro que `diametro_barreno_mm` — en perforación manual
+    (Jack Leg) sin broca de rimado especial, los taladros de alivio suelen
+    perforarse con la misma broca, solo se dejan sin cargar; si se usa una
+    broca de mayor diámetro para el alivio, indícalo aquí.
 
-    Devuelve (posiciones, anillos_info) — `anillos_info` trae el burden y
-    el lado de cada anillo de arranque en milímetros, para mostrarlos como
-    cotas (igual que un software de diseño de malla)."""
+    Devuelve (posiciones, zonas_info) — `zonas_info` trae el burden (y el
+    lado, para las zonas en anillo) de cada zona en milímetros, para
+    mostrarlas como cotas y tabla (igual que un software de diseño de malla)."""
     if diametro_alivio_mm is None:
         diametro_alivio_mm = diametro_barreno_mm
 
     centro = (0.0, alto / 2.0)
-    radio_inicial = burden_inicial_m(diametro_alivio_mm, taladros_alivio)
+    burden_arranque = burden_inicial_m(diametro_alivio_mm, taladros_alivio)
     espaciado_alivio = (diametro_alivio_mm * 2.5) / 1000.0
 
     posiciones = _cluster_alivio(taladros_alivio, centro, espaciado_alivio)
 
-    n_arranque = min(taladros_cargados, 8)
-    n_contorno = taladros_cargados - n_arranque
-    posiciones_arranque, anillos_info = _anillos_arranque(n_arranque, centro, radio_inicial)
-    posiciones += posiciones_arranque
-    posiciones += [
-        PosicionTaladro(y, z, "contorno", anillo=0)
-        for y, z in _puntos_contorno(forma_seccion, ancho, alto, n_contorno, margen_contorno_m)
-    ]
-    return posiciones, anillos_info
+    posiciones_anillo, zonas_info, restantes = _zonas_en_anillo(taladros_cargados, centro, burden_arranque)
+    posiciones += posiciones_anillo
+
+    margen_contorno_m = burden_zona_m(burden_arranque, "contorno")
+    umbral_z = UMBRAL_ARRASTRE_FRACCION_ALTO * alto
+    n_contorno = n_arrastre = 0
+    for y, z in _puntos_contorno(forma_seccion, ancho, alto, restantes, margen_contorno_m):
+        if z < umbral_z:
+            posiciones.append(PosicionTaladro(y, z, "arrastre", anillo=0))
+            n_arrastre += 1
+        else:
+            posiciones.append(PosicionTaladro(y, z, "contorno", anillo=0))
+            n_contorno += 1
+    if n_contorno:
+        zonas_info.append(ZonaInfo(zona="Contorno", n_taladros=n_contorno, burden_mm=margen_contorno_m * 1000.0))
+    if n_arrastre:
+        burden_arrastre = burden_zona_m(burden_arranque, "arrastre")
+        zonas_info.append(ZonaInfo(zona="Arrastre", n_taladros=n_arrastre, burden_mm=burden_arrastre * 1000.0))
+
+    return posiciones, zonas_info
