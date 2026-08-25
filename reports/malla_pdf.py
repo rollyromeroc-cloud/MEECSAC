@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import datetime as _dt
 from io import BytesIO
+from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A3, landscape
@@ -21,6 +22,11 @@ from core.constants import LABORES_VERTICALES
 from core.malla_perforacion import ZonaInfo
 from core.models import DatosGenerales, LaborMinera, ResultadoVoladura
 from viz.malla_plot import build_malla_perforacion_figure
+
+import plotly.graph_objects as go
+
+LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_meecsac.jpg"
+PAGE_SIZE = landscape(A3)
 
 # Colores de marca MEECSAC (muestreados del logo: acento cian de la "M" y
 # el fondo oscuro de la tarjeta) — usados para las barras de título y los
@@ -83,23 +89,45 @@ def _explosivo_por_zona(labor: LaborMinera, zonas: list[ZonaInfo]) -> list[list]
     return filas
 
 
+def _marco_y_pie(canvas, doc) -> None:
+    """Marco de lámina técnica + pie de página (N.° de página, MEECSAC) —
+    dibujado en cada página vía el callback onPage de SimpleDocTemplate."""
+    ancho_pag, alto_pag = PAGE_SIZE
+    canvas.saveState()
+    canvas.setStrokeColor(MEECSAC_DARK)
+    canvas.setLineWidth(1.2)
+    canvas.rect(5 * mm, 5 * mm, ancho_pag - 10 * mm, alto_pag - 10 * mm)
+    canvas.setFont("Helvetica", 7)
+    canvas.setFillColor(colors.grey)
+    canvas.drawString(8 * mm, 6.5 * mm, "MEECSAC — Más que Explosivos")
+    canvas.drawRightString(ancho_pag - 8 * mm, 6.5 * mm, f"Página {doc.page} — generado {_dt.date.today().isoformat()}")
+    canvas.restoreState()
+
+
 def build_malla_pdf(
     labor: LaborMinera,
     resultado: ResultadoVoladura,
     datos: DatosGenerales | None = None,
+    fig: go.Figure | None = None,
+    zonas: list[ZonaInfo] | None = None,
 ) -> BytesIO:
     """Genera la ficha PDF A3 apaisada de la malla de perforación de
-    `labor`. Devuelve un BytesIO listo para `st.download_button`."""
+    `labor`. Devuelve un BytesIO listo para `st.download_button`.
+
+    `fig`/`zonas`, si el llamador ya los calculó (p. ej. para mostrar la
+    malla en pantalla), se reutilizan tal cual en vez de recalcularlos —
+    evita repetir la generación de la malla dos veces por cada render."""
     datos = datos or DatosGenerales()
     es_vertical = labor.tipo in LABORES_VERTICALES
     forma = "Circular" if es_vertical else labor.forma_seccion
     alto_malla = labor.ancho_m if es_vertical else labor.alto_m
 
-    fig, zonas = build_malla_perforacion_figure(
-        labor.ancho_m, alto_malla, labor.taladros_cargados, labor.taladros_alivio,
-        diametro_barreno_mm=labor.diametro_barreno_mm, diametro_alivio_mm=labor.diametro_alivio_mm,
-        forma_seccion=forma, nombre_labor=labor.nombre,
-    )
+    if fig is None or zonas is None:
+        fig, zonas = build_malla_perforacion_figure(
+            labor.ancho_m, alto_malla, labor.taladros_cargados, labor.taladros_alivio,
+            diametro_barreno_mm=labor.diametro_barreno_mm, diametro_alivio_mm=labor.diametro_alivio_mm,
+            forma_seccion=forma, nombre_labor=labor.nombre,
+        )
     try:
         png_bytes = fig.to_image(format="png", width=1100, height=950, scale=2)
         imagen_malla: Image | Paragraph = Image(BytesIO(png_bytes), width=150 * mm, height=130 * mm)
@@ -116,27 +144,35 @@ def build_malla_pdf(
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
-        buffer, pagesize=landscape(A3),
-        leftMargin=10 * mm, rightMargin=10 * mm, topMargin=8 * mm, bottomMargin=8 * mm,
+        buffer, pagesize=PAGE_SIZE,
+        leftMargin=12 * mm, rightMargin=12 * mm, topMargin=11 * mm, bottomMargin=11 * mm,
     )
 
-    # --- barra de título (MEECSAC) ---
+    # --- barra de título (MEECSAC), con logo si está disponible ---
     titulo_txt = f"FICHA DE MALLA DE PERFORACIÓN Y VOLADURA — {labor.nombre.upper()}"
     subtitulo_txt = (
         f"Sección {labor.ancho_m:.2f} × {alto_malla:.2f} m — {forma} · "
         f"Roca: {labor.tipo_roca} · Avance: {labor.avance_proyectado_m:.2f} m"
     )
-    barra_titulo = Table(
-        [[Paragraph(titulo_txt, _ESTILO_TITULO)], [Paragraph(subtitulo_txt, _ESTILO_SUBTITULO)]],
-        colWidths=[277 * mm],
-    )
-    barra_titulo.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), MEECSAC_DARK),
-        ("LINEBELOW", (0, -1), (-1, -1), 2, MEECSAC_CYAN),
-        ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ("TOPPADDING", (0, 0), (0, 0), 6),
-        ("BOTTOMPADDING", (0, -1), (0, -1), 6),
-    ]))
+    textos_titulo = [Paragraph(titulo_txt, _ESTILO_TITULO), Paragraph(subtitulo_txt, _ESTILO_SUBTITULO)]
+    if LOGO_PATH.exists():
+        logo = Image(str(LOGO_PATH), width=16 * mm, height=16 * mm)
+        barra_titulo = Table([[logo, textos_titulo]], colWidths=[20 * mm, 253 * mm])
+        barra_titulo.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), MEECSAC_DARK),
+            ("LINEBELOW", (0, 0), (-1, 0), 2, MEECSAC_CYAN),
+            ("LEFTPADDING", (0, 0), (0, 0), 4), ("LEFTPADDING", (1, 0), (1, 0), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+    else:
+        barra_titulo = Table([textos_titulo], colWidths=[273 * mm])
+        barra_titulo.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), MEECSAC_DARK),
+            ("LINEBELOW", (0, 0), (-1, 0), 2, MEECSAC_CYAN),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 6), ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
 
     # --- panel derecho: distancias por zona (la leyenda de categorías ya
     # va incluida en la propia imagen de la malla, ver viz.malla_plot) ---
@@ -216,11 +252,14 @@ def build_malla_pdf(
         _ESTILO_NOTA,
     )
 
-    doc.build([
-        barra_titulo, Spacer(1, 4 * mm),
-        fila_imagen_zonas, Spacer(1, 4 * mm),
-        fila_inferior, Spacer(1, 3 * mm),
-        nota,
-    ])
+    doc.build(
+        [
+            barra_titulo, Spacer(1, 4 * mm),
+            fila_imagen_zonas, Spacer(1, 4 * mm),
+            fila_inferior, Spacer(1, 3 * mm),
+            nota,
+        ],
+        onFirstPage=_marco_y_pie, onLaterPages=_marco_y_pie,
+    )
     buffer.seek(0)
     return buffer

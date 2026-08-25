@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import numpy as np
 from scipy.interpolate import griddata
+from scipy.ndimage import gaussian_filter
 
 from core.geometry import perfil_seccion, punto_en_poligono
 from core.malla_perforacion import PosicionTaladro
@@ -54,6 +55,12 @@ def malla_isotiempos(
     T = griddata(puntos, valores, (Y, Z), method="linear")
     T_nearest = griddata(puntos, valores, (Y, Z), method="nearest")
     T = np.where(np.isnan(T), T_nearest, T)
+    # el relleno "nearest" queda en parches planos con bordes duros — se
+    # suaviza con un desenfoque gaussiano para que el degradado se vea
+    # continuo y creíble en toda la sección, no solo entre taladros (un
+    # sigma mayor difumina mejor los parches anchos de las esquinas,
+    # p. ej. cerca de un taladro de arrastre aislado).
+    T = gaussian_filter(T, sigma=max(2.0, resolucion * 0.045))
 
     mascara = np.zeros(T.shape, dtype=bool)
     for i in range(T.shape[0]):

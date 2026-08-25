@@ -461,7 +461,10 @@ with st.expander(":material/thermostat: Isotiempos de detonación"):
         st.plotly_chart(fig_isotiempos, use_container_width=True)
 
 st.markdown("**Ficha de malla en PDF**")
-pdf_malla_bytes = build_malla_pdf(labor_malla, resultados[idx_esquema], st.session_state.get("datos_generales"))
+pdf_malla_bytes = build_malla_pdf(
+    labor_malla, resultados[idx_esquema], st.session_state.get("datos_generales"),
+    fig=fig_malla, zonas=zonas_malla,
+)
 st.download_button(
     "Descargar ficha de malla (PDF A3)",
     data=pdf_malla_bytes,
