@@ -9,6 +9,7 @@ from core.voladura import (
     avance_desde_produccion_objetivo,
     calcular_resultado,
     taladros_desde_roca,
+    taladros_por_disparo_seccion,
 )
 
 
@@ -129,3 +130,50 @@ def test_taladros_desde_roca_formula():
 
 def test_taladros_desde_roca_distancia_invalida_devuelve_cero():
     assert taladros_desde_roca(14.00, 10.78, 0.0, 1.5) == 0
+
+
+def test_taladros_por_disparo_seccion_formula_del_cuadro_ots():
+    # Cuadro de parámetros de la OTS: N.° taladros por disparo = 10 × √(A × H)
+    # Sección 2.50 × 2.50 -> área 6.25 -> 10 × 2.5 = 25
+    assert taladros_por_disparo_seccion(2.50, 2.50) == 25
+    # Sección de área 10.78 m² (la del cuadro de referencia) -> 10 × 3.283 = 32.8 -> 33
+    assert taladros_por_disparo_seccion(3.50, 3.08) == 33
+    # no depende del tipo de roca ni del espaciamiento, solo del área: dos
+    # secciones de la misma área dan el mismo número
+    assert taladros_por_disparo_seccion(4.0, 1.0) == taladros_por_disparo_seccion(2.0, 2.0)
+
+
+def test_taladros_por_disparo_seccion_area_invalida_devuelve_cero():
+    assert taladros_por_disparo_seccion(0.0, 2.5) == 0
+    assert taladros_por_disparo_seccion(2.5, 0.0) == 0
+
+
+def test_total_de_taladros_y_detonadores_siguen_el_cuadro_ots():
+    labor = LaborMinera(
+        nombre="Galería", tipo="Galería", etapa="Desarrollo",
+        ancho_m=2.5, alto_m=2.5, avance_proyectado_m=60.0, avance_por_disparo_m=1.5,
+        diametro_barreno_mm=38.0, longitud_barreno_pies=6.0,
+        taladros_cargados=25, taladros_alivio=2, destino_material="Desmonte",
+    )
+    r = calcular_resultado(labor)
+    # Total de Taladros = taladros por disparo × N.° de disparos
+    assert r.total_taladros == 25 * r.n_disparos
+    # Cantidad de Detonadores por Disparo = N.° de taladros por disparo
+    assert r.detonadores_por_disparo == 25
+    # y el total de detonadores coincide con el total de taladros
+    assert r.fulminantes_total == r.total_taladros
+
+
+def test_mecha_por_taladro_es_longitud_de_barreno_mas_un_pie():
+    # Cuadro de la OTS: mecha de seguridad por taladro = longitud de barreno
+    # (pies) + 1 pie
+    labor = LaborMinera(
+        nombre="Galería", tipo="Galería", etapa="Desarrollo",
+        ancho_m=2.5, alto_m=2.5, avance_proyectado_m=60.0, avance_por_disparo_m=1.5,
+        diametro_barreno_mm=38.0, longitud_barreno_pies=6.0,
+        taladros_cargados=25, taladros_alivio=2, destino_material="Desmonte",
+    )
+    r = calcular_resultado(labor)
+    assert r.mecha_por_taladro_m == pytest.approx((6.0 + 1) * 0.3048)
+    assert r.mecha_por_disparo_m == pytest.approx(25 * r.mecha_por_taladro_m)
+    assert r.mecha_total_m == pytest.approx(r.mecha_por_disparo_m * r.n_disparos)

@@ -54,6 +54,16 @@ COEFICIENTE_ROCA = {
     "Suave": 1.0,
 }
 
+# Como se determina el N.° de taladros por disparo de una labor.
+METODO_TALADROS_MANUAL = "Manual (lo ingreso yo)"
+METODO_TALADROS_SECCION = "Por sección — 10 × √(A × H)"
+METODO_TALADROS_ROCA = "Por tipo de roca — (P / dt) + (C × S)"
+METODOS_TALADROS = (
+    METODO_TALADROS_MANUAL,
+    METODO_TALADROS_SECCION,
+    METODO_TALADROS_ROCA,
+)
+
 # Peso específico típico (TM/m³) — referencial, editable por labor.
 DENSIDAD_DESMONTE_DEFAULT = 2.70
 DENSIDAD_MINERAL_DEFAULT = 3.00

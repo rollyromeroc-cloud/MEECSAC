@@ -13,7 +13,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.constants import COEFICIENTE_ROCA, DISTANCIA_TALADROS_RANGO_M, PIE_A_METROS
+from core.constants import (
+    COEFICIENTE_ROCA,
+    DISTANCIA_TALADROS_RANGO_M,
+    METODO_TALADROS_SECCION,
+    PIE_A_METROS,
+)
 from core.geometry import perimetro_seccion
 from core.models import LaborMinera, ResultadoVoladura
 
@@ -123,6 +128,12 @@ def memoria_calculo(labor: LaborMinera, resultado: ResultadoVoladura) -> list[Pa
             f"{_n(resultado.consumo_especifico_kg_m3)} kg/m³",
         ),
         PasoCalculo(
+            "Total de taladros",
+            "Taladros por disparo × N.° de disparos",
+            f"{labor.taladros_cargados} × {resultado.n_disparos}",
+            f"{resultado.total_taladros} unidades",
+        ),
+        PasoCalculo(
             labor.tipo_fulminante,
             "Taladros cargados × N.° de disparos",
             f"{labor.taladros_cargados} × {resultado.n_disparos}",
@@ -147,6 +158,17 @@ def memoria_calculo(labor: LaborMinera, resultado: ResultadoVoladura) -> list[Pa
             f"{_n(resultado.mecha_total_m)} m",
         ),
     ]
+
+    if labor.metodo_taladros == METODO_TALADROS_SECCION:
+        pasos.insert(
+            3,
+            PasoCalculo(
+                "N.° de taladros por disparo (criterio de sección de la OTS)",
+                "10 × √(Ancho × Alto)",
+                f"10 × √({_n(labor.ancho_m)} × {_n(labor.alto_m)})",
+                f"{labor.taladros_cargados} unidades",
+            ),
+        )
 
     if labor.alterar_por_roca:
         rango = DISTANCIA_TALADROS_RANGO_M.get(labor.tipo_roca)

@@ -8,6 +8,8 @@ sin dependencias de Streamlit/QGIS, para poder testearse de forma aislada.
 
 from __future__ import annotations
 
+import math
+
 from core.constants import PIE_A_METROS
 from core.models import LaborMinera, ResultadoVoladura
 
@@ -39,6 +41,21 @@ def taladros_desde_roca(
     if distancia_taladros_m <= 0:
         return 0
     return round(perimetro_m / distancia_taladros_m + coeficiente_roca * area_m2)
+
+
+def taladros_por_disparo_seccion(ancho_m: float, alto_m: float) -> int:
+    """N.° de taladros por disparo según el criterio que la OTS reporta en su
+    Cuadro de parámetros operativos y técnicos:
+
+        N.° taladros por disparo = 10 × √(A × H)
+
+    donde A × H es el área de la sección (ancho × alto, m²). A diferencia de
+    `taladros_desde_roca`, no depende del tipo de roca ni del espaciamiento:
+    solo del tamaño de la sección."""
+    area_m2 = ancho_m * alto_m
+    if area_m2 <= 0:
+        return 0
+    return round(10.0 * math.sqrt(area_m2))
 
 
 def calcular_resultado(labor: LaborMinera) -> ResultadoVoladura:
@@ -75,7 +92,13 @@ def calcular_resultado(labor: LaborMinera) -> ResultadoVoladura:
         explosivo_total_kg / volumen_total_m3 if volumen_total_m3 > 0 else 0.0
     )
 
-    fulminantes_total = labor.taladros_cargados * n_disparos
+    # Cuadro de parámetros de la OTS: "Total de Taladros" = taladros por
+    # disparo × N.° de disparos, y "Cantidad de Detonadores por Disparo" =
+    # N.° de taladros por disparo (un detonador por taladro cargado), de
+    # donde el total de detonadores coincide con el total de taladros.
+    total_taladros = labor.taladros_cargados * n_disparos
+    detonadores_por_disparo = labor.taladros_cargados
+    fulminantes_total = total_taladros
 
     mecha_por_taladro_m = pies_a_metros(
         labor.longitud_barreno_pies + labor.tramo_encendido_pies
@@ -100,6 +123,8 @@ def calcular_resultado(labor: LaborMinera) -> ResultadoVoladura:
         tonelaje_total_tm=tonelaje_total_tm,
         factor_potencia_kg_tm=factor_potencia_kg_tm,
         consumo_especifico_kg_m3=consumo_especifico_kg_m3,
+        total_taladros=total_taladros,
+        detonadores_por_disparo=detonadores_por_disparo,
         fulminantes_total=fulminantes_total,
         mecha_por_taladro_m=mecha_por_taladro_m,
         mecha_por_disparo_m=mecha_por_disparo_m,

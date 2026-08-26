@@ -17,6 +17,9 @@ from core.constants import (
     EQUIPOS_PERFORACION,
     FORMAS_SECCION,
     LABORES_VERTICALES,
+    METODO_TALADROS_MANUAL,
+    METODO_TALADROS_ROCA,
+    METODO_TALADROS_SECCION,
     ORDEN_ETAPAS,
     TIPOS_CORTE,
     TIPOS_EXPLOSIVO_DEFAULT,
@@ -42,6 +45,7 @@ from core.voladura import (
     avance_desde_produccion_objetivo,
     calcular_programa,
     taladros_desde_roca,
+    taladros_por_disparo_seccion,
 )
 from reports.docx_builder import build_voladura_report
 from reports.dxf_export import construir_dxf_labor
@@ -85,29 +89,26 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
         ),
     )
 
-    st.markdown("**Propiedades de la roca**")
+    st.markdown("**Propiedades de la roca y N.° de taladros**")
     c_roca1, c_roca2 = st.columns([1, 2])
     with c_roca1:
         tipo_roca = st.selectbox("Tipo de roca", TIPOS_ROCA, index=1, key="tipo_roca_nueva_labor")
     with c_roca2:
-        alterar_por_roca = st.checkbox(
-            "Alterar los parámetros de perforación/voladura según el tipo de roca "
-            "(estimación general, no es el criterio de campo de la OTS)",
-            value=False,
-            key="alterar_por_roca_nueva_labor",
+        metodo_taladros = st.selectbox(
+            "¿Cómo se calcula el N.° de taladros por disparo?",
+            [METODO_TALADROS_MANUAL, METODO_TALADROS_SECCION, METODO_TALADROS_ROCA],
+            key="metodo_taladros_nueva_labor",
             help=(
-                "Desmarcado (por defecto): el tipo de roca solo aparece como "
-                "dato descriptivo en el reporte, sin afectar el cálculo — "
-                "comportamiento actual. Marcado: N.° de taladros se calcula "
-                "como (Perímetro / dt) + (Coeficiente de roca × Área), una "
-                "fórmula empírica de referencia genérica. Ojo: la OTS reporta "
-                "explícitamente que en la práctica NO usa fórmulas genéricas "
-                "de este tipo, sino mallas de perforación fijas por tamaño de "
-                "sección definidas con criterio propio a partir de la "
-                "experiencia de campo — usa esto solo como una estimación "
-                "preliminar, no como el número que reportaría la OTS."
+                "• Manual: usas el número que escribes abajo.\n\n"
+                "• Por sección: N.° T = 10 × √(A × H), el criterio que la OTS "
+                "reporta en su cuadro de parámetros operativos — solo depende "
+                "del tamaño de la sección.\n\n"
+                "• Por tipo de roca: N.° T = (Perímetro / dt) + (Coef. roca × "
+                "Área), fórmula empírica genérica que además pide el "
+                "espaciamiento entre taladros."
             ),
         )
+    alterar_por_roca = metodo_taladros == METODO_TALADROS_ROCA
     distancia_taladros = None
     if alterar_por_roca:
         rango_dt = DISTANCIA_TALADROS_RANGO_M.get(tipo_roca, (0.0, 0.0))
@@ -152,8 +153,10 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
             )
         with c5:
             taladros_label = "N.° taladros x disparo"
-            if alterar_por_roca:
+            if metodo_taladros == METODO_TALADROS_ROCA:
                 taladros_label += " (se recalcula según la roca)"
+            elif metodo_taladros == METODO_TALADROS_SECCION:
+                taladros_label += " (se recalcula según la sección)"
             taladros_cargados = st.number_input(
                 taladros_label, min_value=0, value=None if es_avance_mensual else 23, step=1,
                 placeholder="Opcional si no se conoce" if es_avance_mensual else None,
@@ -247,10 +250,12 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
 
                 avance_por_disparo_final = avance_por_disparo if avance_por_disparo is not None else 0.0
                 taladros_final = int(taladros_cargados) if taladros_cargados is not None else 0
-                if alterar_por_roca:
+                if metodo_taladros == METODO_TALADROS_ROCA:
                     perimetro = perimetro_seccion(forma_seccion, ancho, alto)
                     coeficiente = COEFICIENTE_ROCA.get(tipo_roca, 0.0)
                     taladros_final = taladros_desde_roca(perimetro, ancho * alto, distancia_taladros, coeficiente)
+                elif metodo_taladros == METODO_TALADROS_SECCION:
+                    taladros_final = taladros_por_disparo_seccion(ancho, alto)
 
                 labor = LaborMinera(
                     nombre=nombre,
@@ -279,6 +284,7 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
                     tipo_roca=tipo_roca,
                     alterar_por_roca=alterar_por_roca,
                     distancia_taladros_m=distancia_taladros if alterar_por_roca else None,
+                    metodo_taladros=metodo_taladros,
                     destino_material=destino,
                     densidad_desmonte_tm_m3=densidad_desmonte,
                     densidad_mineral_tm_m3=densidad_mineral,

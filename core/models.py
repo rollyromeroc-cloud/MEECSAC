@@ -12,6 +12,7 @@ from core.constants import (
     DISTRIBUCION_EXPLOSIVO_DEFAULT,
     HEMISFERIO_DEFAULT,
     LONGITUD_BARRENO_DEFAULT_PIES,
+    METODO_TALADROS_MANUAL,
     PESO_CARTUCHO_DEFAULT_KG,
     TIPOS_EXPLOSIVO_DEFAULT,
     TRAMO_ENCENDIDO_MECHA_PIES,
@@ -79,9 +80,17 @@ class LaborMinera:
     # real de campo de la OTS — según el informe técnico de referencia
     # (INFORME TECNICO 180TN), la OTS diseña sus mallas de perforación con
     # criterio propio caso por caso, no con una fórmula universal.
+    #
+    # metodo_taladros registra con que criterio se fijo taladros_cargados:
+    # manual, por seccion (10 x raiz(A x H), el que la OTS reporta en su
+    # cuadro de parametros operativos) o por tipo de roca (la formula de
+    # arriba). Un proyecto exportado antes de que existiera este campo no lo
+    # trae, y cae en el valor por defecto; por eso alterar_por_roca se
+    # conserva y sigue siendo la senal de "se uso la formula de roca".
     tipo_roca: str = "Media"
     alterar_por_roca: bool = False
     distancia_taladros_m: Optional[float] = None
+    metodo_taladros: str = METODO_TALADROS_MANUAL
 
     # Aspectos técnicos / material
     destino_material: str = "Desmonte"  # "Desmonte" o "Mineral"
@@ -136,6 +145,12 @@ class ResultadoVoladura:
     factor_potencia_kg_tm: float
     consumo_especifico_kg_m3: float
 
+    # "Total de Taladros" y "Cantidad de Detonadores por Disparo" del cuadro
+    # de parametros de la OTS. El total de detonadores coincide con el total
+    # de taladros (un detonador por taladro cargado), que es lo que ya
+    # reportaba `fulminantes_total`.
+    total_taladros: int
+    detonadores_por_disparo: int
     fulminantes_total: int
     mecha_por_taladro_m: float
     mecha_por_disparo_m: float
