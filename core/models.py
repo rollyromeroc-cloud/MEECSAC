@@ -68,25 +68,20 @@ class LaborMinera:
     pct_explosivo_1: float = DISTRIBUCION_EXPLOSIVO_DEFAULT[0]
     pct_explosivo_2: float = DISTRIBUCION_EXPLOSIVO_DEFAULT[1]
 
-    # Propiedades de la roca — elección propia, separada del criterio
-    # estándar de la OTS. alterar_por_roca decide si tipo_roca se usa solo
-    # como dato descriptivo del reporte (False, comportamiento actual) o si
-    # además debe recalcular taladros_cargados según N.° T = (P/dt) + (C×S)
-    # (True) — ver core.voladura.taladros_desde_roca. distancia_taladros_m
-    # es "dt" en esa fórmula; None = usar el punto medio del rango de la
-    # roca seleccionada (ver DISTANCIA_TALADROS_RANGO_M).
-    #
-    # OJO: esta fórmula es una estimación empírica genérica, NO el criterio
-    # real de campo de la OTS — según el informe técnico de referencia
-    # (INFORME TECNICO 180TN), la OTS diseña sus mallas de perforación con
-    # criterio propio caso por caso, no con una fórmula universal.
+    # Propiedades de la roca. alterar_por_roca decide si tipo_roca se usa
+    # solo como dato descriptivo del reporte (False) o si además debe
+    # recalcular taladros_cargados según N.° T = (P/dt) + (C×S) (True) —
+    # ver core.voladura.taladros_desde_roca. distancia_taladros_m es "dt"
+    # en esa fórmula; None = usar el punto medio del rango de la roca
+    # seleccionada (ver DISTANCIA_TALADROS_RANGO_M).
     #
     # metodo_taladros registra con que criterio se fijo taladros_cargados:
-    # manual, por seccion (10 x raiz(A x H), el que la OTS reporta en su
-    # cuadro de parametros operativos) o por tipo de roca (la formula de
-    # arriba). Un proyecto exportado antes de que existiera este campo no lo
-    # trae, y cae en el valor por defecto; por eso alterar_por_roca se
-    # conserva y sigue siendo la senal de "se uso la formula de roca".
+    # manual, por seccion (10 x raiz(A x H)) o por tipo de roca (la formula
+    # de arriba). Las dos formulas las proporciono la propia OTS, con sus
+    # tablas de dt y coeficiente de roca. Un proyecto exportado antes de que
+    # existiera este campo no lo trae y cae en el valor por defecto; por eso
+    # alterar_por_roca se conserva y sigue siendo la senal de "se uso la
+    # formula de roca".
     tipo_roca: str = "Media"
     alterar_por_roca: bool = False
     distancia_taladros_m: Optional[float] = None

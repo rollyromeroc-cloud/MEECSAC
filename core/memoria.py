@@ -178,7 +178,7 @@ def memoria_calculo(labor: LaborMinera, resultado: ResultadoVoladura) -> list[Pa
         pasos.insert(
             3,
             PasoCalculo(
-                f"N.° de taladros (estimación empírica según roca {labor.tipo_roca.lower()}, no es el criterio de campo de la OTS)",
+                f"N.° de taladros por disparo (criterio por tipo de roca {labor.tipo_roca.lower()} de la OTS)",
                 "(Perímetro / dt) + (Coeficiente de roca × Área)",
                 f"({_n(perimetro)} / {_n(dt, 3)}) + ({coeficiente:.1f} × {_n(resultado.area_m2, 3)})",
                 f"{labor.taladros_cargados} unidades",

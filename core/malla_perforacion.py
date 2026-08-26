@@ -11,9 +11,10 @@ allá del criterio general que ya existe en `core.voladura.
 taladros_desde_roca`). El objetivo es una malla dimensionalmente coherente
 y reconocible por un perforista — imitando software de diseño de mallas
 tipo JKSimBlast/XSiteBlast/DIMAP en la FORMA de calcular y mostrar
-distancias — no un cálculo certificado ni el criterio de campo real de
-ninguna OTS en particular (ver `core.models.LaborMinera.tipo_roca` para el
-mismo disclaimer aplicado a N.° de taladros).
+distancias — no un cálculo certificado. El disclaimer aplica al PATRÓN
+geométrico (dónde cae cada taladro), no al N.° de taladros: ese sí sale de
+las fórmulas que proporciona la OTS (ver `core.voladura.
+taladros_por_disparo_seccion` y `taladros_desde_roca`).
 
 Burden de las zonas en anillo del corte quemado (arranque/ayuda/subayuda)
 — método de Holmberg (Holmberg, 1982; ver también Persson, Holmberg & Lee,

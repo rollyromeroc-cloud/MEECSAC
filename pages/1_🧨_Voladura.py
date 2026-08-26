@@ -99,13 +99,13 @@ with st.expander("Agregar labor minera", icon=":material/add_circle:", expanded=
             [METODO_TALADROS_MANUAL, METODO_TALADROS_SECCION, METODO_TALADROS_ROCA],
             key="metodo_taladros_nueva_labor",
             help=(
+                "Las dos fórmulas son las que proporciona la OTS.\n\n"
                 "• Manual: usas el número que escribes abajo.\n\n"
-                "• Por sección: N.° T = 10 × √(A × H), el criterio que la OTS "
-                "reporta en su cuadro de parámetros operativos — solo depende "
-                "del tamaño de la sección.\n\n"
+                "• Por sección: N.° T = 10 × √(A × H) — solo depende del "
+                "tamaño de la sección (cuadro de parámetros operativos).\n\n"
                 "• Por tipo de roca: N.° T = (Perímetro / dt) + (Coef. roca × "
-                "Área), fórmula empírica genérica que además pide el "
-                "espaciamiento entre taladros."
+                "Área) — además pide el espaciamiento entre taladros (dt), "
+                "con el rango y el coeficiente de la tabla por tipo de roca."
             ),
         )
     alterar_por_roca = metodo_taladros == METODO_TALADROS_ROCA
@@ -417,8 +417,9 @@ st.header(":material/grid_on: Malla de perforación", divider="gray")
 st.caption(
     "Plantilla paramétrica de un round completo (alivios al centro, zonas "
     "en anillo arranque→ayuda→subayuda, contorno y arrastre sobre la "
-    "sección real) — una estimación visual de referencia, no el diseño de "
-    "malla real de campo. El corte sigue el método de Holmberg: B₁ = 1.5 × "
+    "sección real) — es una referencia visual de dónde cae cada taladro, no "
+    "el trazo de malla real de campo; el N.° de taladros sí sale de las "
+    "fórmulas de la OTS. El corte sigue el método de Holmberg: B₁ = 1.5 × "
     "Ø_alivio × √N.° alivios para el arranque, y cada sección siguiente abre "
     "contra el vacío en diagonal de la anterior (B(n) = 1.5 × √2 × B(n-1)). "
     "Contorno y arrastre ya no son parte del corte, así que se escalan desde "
