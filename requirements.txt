@@ -1,6 +1,14 @@
 streamlit==1.58.0
 starlette<1.4
 python-docx>=1.1
+# plotly<6 y kaleido<1 van juntos y atados a runtime.txt (Python 3.12):
+# kaleido>=1 exige un Chrome instalado (via choreographer) que Streamlit Cloud
+# no tiene, y plotly>=6 exige kaleido>=1 para to_image(). kaleido 0.2.1 trae
+# wheel universal, asi que INSTALA en cualquier Python pero es de 2021: en
+# 3.14 se verifico que se CUELGA en to_image() (no lanza, se queda colgado, y
+# un cuelgue no lo atrapa el try/except de reports/malla_pdf.py; congelaria la
+# sesion). 3.13 no se probo. Por eso runtime.txt fija 3.12, donde este combo
+# es el estandar probado. No subir ninguno de los tres por separado.
 plotly>=5.24,<6.0
 pandas>=2.2
 numpy>=1.26

@@ -22,6 +22,13 @@ from core.polvorin import (
     perimetro,
 )
 from reports.docx_builder import build_polvorin_report
+from viz.dashboard import (
+    fig_distancias_vs_minima,
+    fig_emr_por_polvorin,
+    fig_estado_cumplimiento,
+    fig_holgura_por_punto,
+    kpis_polvorin,
+)
 
 st.set_page_config(page_title="Polvorín", page_icon=str(LOGO_PATH), layout="wide")
 require_login()
@@ -159,6 +166,30 @@ if not polvorines:
     st.stop()
 
 resultados_por_polvorin = {p.nombre: evaluar_distancias(p, puntos) for p in polvorines}
+
+vista = st.segmented_control(
+    "Vista", ["Detalle", "Dashboard"], default="Detalle", key="vista_polvorin",
+    label_visibility="collapsed",
+)
+if vista == "Dashboard":
+    st.header(":material/dashboard: Tablero de seguridad de polvorín", divider="gray")
+    kpis = kpis_polvorin(polvorines, puntos, resultados_por_polvorin)
+    for fila in (kpis[:3], kpis[3:]):
+        for columna, kpi in zip(st.columns(len(fila)), fila):
+            columna.metric(
+                f"{kpi.icono} {kpi.etiqueta}", kpi.valor, border=True, help=kpi.ayuda,
+            )
+    c1, c2 = st.columns(2)
+    c1.plotly_chart(fig_emr_por_polvorin(polvorines), use_container_width=True)
+    c2.plotly_chart(fig_estado_cumplimiento(resultados_por_polvorin), use_container_width=True)
+    st.plotly_chart(fig_distancias_vs_minima(resultados_por_polvorin), use_container_width=True)
+    st.plotly_chart(fig_holgura_por_punto(resultados_por_polvorin), use_container_width=True)
+    st.caption(
+        "El cumplimiento se evalúa contra la distancia mínima que confirmaste en cada punto "
+        "de riesgo, no contra la sugerencia de la Tabla K — cambia a Detalle para ver ambas, "
+        "el mapa y el reporte."
+    )
+    st.stop()
 
 st.header(":material/warehouse: Polvorines registrados", divider="gray")
 for polvorin in polvorines:

@@ -47,6 +47,13 @@ from core.voladura import (
 from reports.docx_builder import build_voladura_report
 from reports.dxf_export import construir_dxf_labor
 from reports.malla_pdf import build_malla_pdf
+from viz.dashboard import (
+    fig_avance_tonelaje_por_labor,
+    fig_explosivo_por_tipo,
+    fig_factor_potencia,
+    fig_tonelaje_por_etapa,
+    kpis_voladura,
+)
 from viz.malla_plot import build_isotiempos_figure, build_malla_perforacion_figure
 from viz.tunnel_plot import build_tunnel_figure, build_tunnel_figure_solido
 
@@ -298,6 +305,30 @@ if not labores:
     st.stop()
 
 resultados = calcular_programa(labores)
+
+vista = st.segmented_control(
+    "Vista", ["Detalle", "Dashboard"], default="Detalle", key="vista_voladura",
+    label_visibility="collapsed",
+)
+if vista == "Dashboard":
+    st.header(":material/dashboard: Tablero del programa de voladura", divider="gray")
+    kpis = kpis_voladura(labores, resultados)
+    for fila in (kpis[:3], kpis[3:]):
+        for columna, kpi in zip(st.columns(len(fila)), fila):
+            columna.metric(
+                f"{kpi.icono} {kpi.etiqueta}", kpi.valor, border=True, help=kpi.ayuda,
+            )
+    c1, c2 = st.columns(2)
+    c1.plotly_chart(fig_avance_tonelaje_por_labor(labores, resultados), use_container_width=True)
+    c2.plotly_chart(fig_tonelaje_por_etapa(labores, resultados), use_container_width=True)
+    c3, c4 = st.columns(2)
+    c3.plotly_chart(fig_explosivo_por_tipo(labores, resultados), use_container_width=True)
+    c4.plotly_chart(fig_factor_potencia(labores, resultados), use_container_width=True)
+    st.caption(
+        "Mismos cálculos que la vista Detalle (`core.voladura`), solo agregados — "
+        "cambia a Detalle para el esquema 3D, la malla de perforación y los reportes."
+    )
+    st.stop()
 
 st.header(":material/table_view: Resultados por labor", divider="gray")
 
