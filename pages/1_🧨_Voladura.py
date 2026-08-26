@@ -47,6 +47,7 @@ from reports.docx_builder import build_voladura_report
 from reports.dxf_export import construir_dxf_labor
 from reports.malla_pdf import build_malla_pdf
 from viz.dashboard import kpis_voladura
+from viz.resumen import con_fila_total, tabla_resultados
 from viz.malla_plot import build_isotiempos_figure, build_malla_perforacion_figure
 from viz.tunnel_plot import build_tunnel_figure, build_tunnel_figure_solido
 
@@ -321,6 +322,12 @@ if vista == "Dashboard":
                 f"{kpi.icono} {kpi.etiqueta}", kpi.valor, border=True, help=kpi.ayuda,
             )
 
+    st.subheader(":material/table_view: Resumen de cálculos por labor", divider="gray")
+    st.dataframe(
+        con_fila_total(tabla_resultados(labores, resultados), resultados),
+        use_container_width=True, hide_index=True,
+    )
+
     st.subheader(":material/view_in_ar: Esquema 3D y malla de perforación por labor", divider="gray")
     nombres_dash = [labor.nombre for labor in labores]
     labores_ver = st.multiselect(
@@ -354,30 +361,7 @@ if vista == "Dashboard":
 
 st.header(":material/table_view: Resultados por labor", divider="gray")
 
-tabla = pd.DataFrame(
-    [
-        {
-            "Labor": labor.nombre,
-            "Sección (m)": f"{labor.ancho_m} × {labor.alto_m}",
-            "Longitud programa (m)": labor.avance_proyectado_m,
-            "Producción mineral (TM)": round(r.tonelaje_total_tm, 2) if labor.destino_material == "Mineral" else 0.0,
-            "Producción desmonte (TM)": round(r.tonelaje_total_tm, 2) if labor.destino_material == "Desmonte" else 0.0,
-            "Avance x disparo (m)": labor.avance_por_disparo_m,
-            "N.° taladros x disparo": labor.taladros_cargados,
-            "N.° disparos": r.n_disparos,
-            "Tipo": labor.tipo,
-            "Etapa": labor.etapa,
-            "Área (m²)": round(r.area_m2, 3),
-            "Explosivo total (kg)": round(r.explosivo_total_kg, 2),
-            "Volumen total (m³)": round(r.volumen_total_m3, 2),
-            "Tonelaje total (TM)": round(r.tonelaje_total_tm, 2),
-            "Factor de potencia (kg/TM)": round(r.factor_potencia_kg_tm, 2),
-            "Fulminantes": r.fulminantes_total,
-            "Mecha total (m)": round(r.mecha_total_m, 2),
-        }
-        for labor, r in zip(labores, resultados)
-    ]
-)
+tabla = tabla_resultados(labores, resultados)
 st.dataframe(tabla, use_container_width=True, hide_index=True)
 
 nombres = [labor.nombre for labor in labores]
