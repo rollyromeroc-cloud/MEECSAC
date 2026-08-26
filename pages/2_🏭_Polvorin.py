@@ -182,11 +182,32 @@ if vista == "Dashboard":
             columna.metric(
                 f"{kpi.icono} {kpi.etiqueta}", kpi.valor, border=True, help=kpi.ayuda,
             )
+    # `key` explícita en cada gráfico: sin ella Streamlit deriva el id del
+    # elemento de sus parámetros, y cuando todavía no hay puntos de riesgo
+    # varias de estas figuras son idénticas (la misma figura vacía "Sin
+    # puntos de riesgo registrados") — mismo id, StreamlitDuplicateElementId.
     c1, c2 = st.columns(2)
-    c1.plotly_chart(fig_emr_por_polvorin(polvorines), use_container_width=True)
-    c2.plotly_chart(fig_estado_cumplimiento(resultados_por_polvorin), use_container_width=True)
-    st.plotly_chart(fig_distancias_vs_minima(resultados_por_polvorin), use_container_width=True)
-    st.plotly_chart(fig_holgura_por_punto(resultados_por_polvorin), use_container_width=True)
+    c1.plotly_chart(
+        fig_emr_por_polvorin(polvorines), use_container_width=True, key="dash_pol_emr",
+    )
+    if puntos:
+        c2.plotly_chart(
+            fig_estado_cumplimiento(resultados_por_polvorin),
+            use_container_width=True, key="dash_pol_cumplimiento",
+        )
+        st.plotly_chart(
+            fig_distancias_vs_minima(resultados_por_polvorin),
+            use_container_width=True, key="dash_pol_distancias",
+        )
+        st.plotly_chart(
+            fig_holgura_por_punto(resultados_por_polvorin),
+            use_container_width=True, key="dash_pol_holgura",
+        )
+    else:
+        # los tres gráficos de distancias dirían exactamente lo mismo
+        # ("sin puntos de riesgo"); un solo aviso comunica igual y no
+        # llena el tablero de recuadros vacíos repetidos.
+        c2.info("Agrega puntos de riesgo para ver el cumplimiento de distancias.")
     st.caption(
         "El cumplimiento se evalúa contra la distancia mínima que confirmaste en cada punto "
         "de riesgo, no contra la sugerencia de la Tabla K — cambia a Detalle para ver ambas, "
