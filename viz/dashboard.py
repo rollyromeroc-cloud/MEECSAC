@@ -8,6 +8,11 @@ Streamlit.
 No introduce ningún cálculo nuevo: todos los números salen de
 `core.voladura.calcular_programa` y `core.polvorin` (EMR y distancias),
 solo se agregan y se grafican.
+
+En Voladura solo se arman los KPI: el tablero muestra los esquemas 2D y 3D
+de cada labor (`viz.tunnel_plot` y `viz.malla_plot`), que es lo que se usa
+en un informe OTS — no gráficos de barras de tonelaje o factor de potencia,
+que no forman parte de ese entregable.
 """
 
 from __future__ import annotations
@@ -18,7 +23,6 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-from core.constants import ORDEN_ETAPAS
 from core.models import LaborMinera, Polvorin, PuntoRiesgo, ResultadoDistancia, ResultadoVoladura
 from core.polvorin import emr_kg_polvorin
 
@@ -28,9 +32,6 @@ MEECSAC_CYAN = "#00A7E3"
 COLOR_OK = "#2A9D8F"
 COLOR_ALERTA = "#E63946"
 COLOR_NEUTRO = "#9AA5AB"
-# Serie categórica fija (no se cicla): explosivo tipo 1 / tipo 2.
-COLOR_TIPO1 = "#88CCEE"
-COLOR_TIPO2 = "#CC6677"
 
 _PLANTILLA = "plotly_white"
 
@@ -88,152 +89,6 @@ def kpis_voladura(
             ayuda="Explosivo total ÷ tonelaje total del programa (no el promedio de los factores por labor).",
         ),
     ]
-
-
-def _df_voladura(
-    labores: list[LaborMinera], resultados: list[ResultadoVoladura]
-) -> pd.DataFrame:
-    df = pd.DataFrame(
-        [
-            {
-                "Labor": l.nombre,
-                "Tipo": l.tipo,
-                "Etapa": l.etapa,
-                "Destino": l.destino_material,
-                "Avance (m)": l.avance_proyectado_m,
-                "Disparos": r.n_disparos,
-                "Tonelaje (TM)": r.tonelaje_total_tm,
-                "Explosivo (kg)": r.explosivo_total_kg,
-                "Explosivo tipo 1 (kg)": r.explosivo_tipo1_kg,
-                "Explosivo tipo 2 (kg)": r.explosivo_tipo2_kg,
-                "Factor de potencia (kg/TM)": r.factor_potencia_kg_tm,
-            }
-            for l, r in zip(labores, resultados)
-        ]
-    )
-    if not df.empty:
-        df["Etapa"] = pd.Categorical(df["Etapa"], categories=ORDEN_ETAPAS, ordered=True)
-        df = df.sort_values(["Etapa", "Labor"])
-    return df
-
-
-def fig_avance_tonelaje_por_labor(
-    labores: list[LaborMinera], resultados: list[ResultadoVoladura]
-) -> go.Figure:
-    """Avance (barras) y tonelaje (línea, eje secundario) por labor — las
-    dos magnitudes del programa que se leen juntas, en distinta unidad."""
-    df = _df_voladura(labores, resultados)
-    if df.empty:
-        return _fig_vacia("Sin labores registradas")
-    fig = go.Figure()
-    fig.add_trace(
-        go.Bar(
-            x=df["Labor"], y=df["Avance (m)"], name="Avance (m)",
-            marker_color=MEECSAC_CYAN,
-            hovertemplate="%{x}<br>Avance: %{y:,.2f} m<extra></extra>",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df["Labor"], y=df["Tonelaje (TM)"], name="Tonelaje (TM)",
-            mode="lines+markers", yaxis="y2",
-            line=dict(color=MEECSAC_DARK, width=2),
-            hovertemplate="%{x}<br>Tonelaje: %{y:,.2f} TM<extra></extra>",
-        )
-    )
-    fig.update_layout(
-        template=_PLANTILLA, title="Avance y tonelaje por labor",
-        yaxis=dict(title="Avance (m)"),
-        yaxis2=dict(title="Tonelaje (TM)", overlaying="y", side="right", showgrid=False),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-        margin=dict(l=10, r=10, t=60, b=10), height=340,
-    )
-    return fig
-
-
-def fig_tonelaje_por_etapa(
-    labores: list[LaborMinera], resultados: list[ResultadoVoladura]
-) -> go.Figure:
-    """Tonelaje por etapa, separado por destino del material (mineral vs
-    desmonte) — la lectura que interesa para producción."""
-    df = _df_voladura(labores, resultados)
-    if df.empty:
-        return _fig_vacia("Sin labores registradas")
-    agrupado = df.groupby(["Etapa", "Destino"], observed=True)["Tonelaje (TM)"].sum().reset_index()
-    fig = px.bar(
-        agrupado, x="Etapa", y="Tonelaje (TM)", color="Destino",
-        title="Tonelaje por etapa y destino del material",
-        color_discrete_map={"Mineral": MEECSAC_CYAN, "Desmonte": COLOR_NEUTRO},
-    )
-    fig.update_layout(
-        template=_PLANTILLA, margin=dict(l=10, r=10, t=60, b=10), height=340,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-    )
-    return fig
-
-
-def fig_explosivo_por_tipo(
-    labores: list[LaborMinera], resultados: list[ResultadoVoladura]
-) -> go.Figure:
-    """Reparto del explosivo entre los dos tipos declarados, por labor."""
-    df = _df_voladura(labores, resultados)
-    if df.empty:
-        return _fig_vacia("Sin labores registradas")
-    fig = go.Figure()
-    fig.add_trace(
-        go.Bar(
-            x=df["Labor"], y=df["Explosivo tipo 1 (kg)"], name="Explosivo tipo 1",
-            marker_color=COLOR_TIPO1,
-            hovertemplate="%{x}<br>Tipo 1: %{y:,.2f} kg<extra></extra>",
-        )
-    )
-    fig.add_trace(
-        go.Bar(
-            x=df["Labor"], y=df["Explosivo tipo 2 (kg)"], name="Explosivo tipo 2",
-            marker_color=COLOR_TIPO2,
-            hovertemplate="%{x}<br>Tipo 2: %{y:,.2f} kg<extra></extra>",
-        )
-    )
-    fig.update_layout(
-        template=_PLANTILLA, barmode="stack", title="Explosivo por tipo y labor",
-        yaxis=dict(title="Explosivo (kg)"),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-        margin=dict(l=10, r=10, t=60, b=10), height=340,
-    )
-    return fig
-
-
-def fig_factor_potencia(
-    labores: list[LaborMinera], resultados: list[ResultadoVoladura]
-) -> go.Figure:
-    """Factor de potencia por labor, con la referencia del programa — para
-    ver de un vistazo qué labor se sale del promedio."""
-    df = _df_voladura(labores, resultados)
-    if df.empty:
-        return _fig_vacia("Sin labores registradas")
-    explosivo = sum(r.explosivo_total_kg for r in resultados)
-    tonelaje = sum(r.tonelaje_total_tm for r in resultados)
-    referencia = explosivo / tonelaje if tonelaje > 0 else 0.0
-    fig = go.Figure()
-    fig.add_trace(
-        go.Bar(
-            x=df["Labor"], y=df["Factor de potencia (kg/TM)"], name="Factor de potencia",
-            marker_color=MEECSAC_DARK,
-            hovertemplate="%{x}<br>%{y:,.3f} kg/TM<extra></extra>",
-        )
-    )
-    if referencia > 0:
-        fig.add_hline(
-            y=referencia, line_dash="dash", line_color=COLOR_ALERTA,
-            annotation_text=f"Programa: {referencia:,.3f} kg/TM",
-            annotation_position="top left",
-        )
-    fig.update_layout(
-        template=_PLANTILLA, title="Factor de potencia por labor",
-        yaxis=dict(title="kg/TM"), showlegend=False,
-        margin=dict(l=10, r=10, t=60, b=10), height=340,
-    )
-    return fig
 
 
 # --------------------------------------------------------------------------

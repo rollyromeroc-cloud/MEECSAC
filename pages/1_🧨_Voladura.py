@@ -47,13 +47,7 @@ from core.voladura import (
 from reports.docx_builder import build_voladura_report
 from reports.dxf_export import construir_dxf_labor
 from reports.malla_pdf import build_malla_pdf
-from viz.dashboard import (
-    fig_avance_tonelaje_por_labor,
-    fig_explosivo_por_tipo,
-    fig_factor_potencia,
-    fig_tonelaje_por_etapa,
-    kpis_voladura,
-)
+from viz.dashboard import kpis_voladura
 from viz.malla_plot import build_isotiempos_figure, build_malla_perforacion_figure
 from viz.tunnel_plot import build_tunnel_figure, build_tunnel_figure_solido
 
@@ -305,6 +299,20 @@ if not labores:
     st.stop()
 
 resultados = calcular_programa(labores)
+dg_esquema = st.session_state.setdefault("datos_generales", DatosGenerales())
+
+
+def _forma_malla(labor: LaborMinera) -> str | None:
+    """Forma de sección con la que se dibuja la malla: un Pique/Chimenea se
+    perfora sobre una sección circular, no sobre la herradura de la labor."""
+    return "Circular" if labor.tipo in LABORES_VERTICALES else labor.forma_seccion
+
+
+def _alto_malla(labor: LaborMinera) -> float:
+    """En labores verticales la "sección" es el círculo de diámetro
+    `ancho_m`, así que el alto de la malla es ese mismo diámetro."""
+    return labor.ancho_m if labor.tipo in LABORES_VERTICALES else labor.alto_m
+
 
 vista = st.segmented_control(
     "Vista", ["Detalle", "Dashboard"], default="Detalle", key="vista_voladura",
@@ -318,15 +326,35 @@ if vista == "Dashboard":
             columna.metric(
                 f"{kpi.icono} {kpi.etiqueta}", kpi.valor, border=True, help=kpi.ayuda,
             )
-    c1, c2 = st.columns(2)
-    c1.plotly_chart(fig_avance_tonelaje_por_labor(labores, resultados), use_container_width=True)
-    c2.plotly_chart(fig_tonelaje_por_etapa(labores, resultados), use_container_width=True)
-    c3, c4 = st.columns(2)
-    c3.plotly_chart(fig_explosivo_por_tipo(labores, resultados), use_container_width=True)
-    c4.plotly_chart(fig_factor_potencia(labores, resultados), use_container_width=True)
+
+    st.subheader(":material/view_in_ar: Esquema 3D y malla de perforación por labor", divider="gray")
+    nombres_dash = [labor.nombre for labor in labores]
+    labores_ver = st.multiselect(
+        "Labores a mostrar", nombres_dash, default=nombres_dash[:3],
+        help="Cada labor dibuja su sólido 3D y su malla; mostrar muchas a la vez hace más lento el tablero.",
+    )
+    if not labores_ver:
+        st.info("Selecciona al menos una labor para ver sus esquemas.")
+    for nombre_labor in labores_ver:
+        i = nombres_dash.index(nombre_labor)
+        labor_d, resultado_d = labores[i], resultados[i]
+        st.markdown(f"**{labor_d.tipo}: {labor_d.nombre}** — {labor_d.etapa}")
+        col_3d, col_malla = st.columns(2)
+        col_3d.plotly_chart(
+            build_tunnel_figure_solido(labor_d, resultado_d, n_meses=dg_esquema.periodo_meses),
+            use_container_width=True, key=f"dash_3d_{i}",
+        )
+        fig_malla_d, _ = build_malla_perforacion_figure(
+            labor_d.ancho_m, _alto_malla(labor_d), labor_d.taladros_cargados, labor_d.taladros_alivio,
+            diametro_barreno_mm=labor_d.diametro_barreno_mm,
+            diametro_alivio_mm=labor_d.diametro_alivio_mm,
+            forma_seccion=_forma_malla(labor_d), nombre_labor=labor_d.nombre,
+        )
+        col_malla.plotly_chart(fig_malla_d, use_container_width=True, key=f"dash_malla_{i}")
+
     st.caption(
-        "Mismos cálculos que la vista Detalle (`core.voladura`), solo agregados — "
-        "cambia a Detalle para el esquema 3D, la malla de perforación y los reportes."
+        "Mismos esquemas que la vista Detalle, agrupados para comparar labores — "
+        "cambia a Detalle para las cotas, la secuencia de disparo y los reportes."
     )
     st.stop()
 
@@ -374,7 +402,6 @@ with c_estilo:
         "Estilo", ["Wireframe", "Sólido"], key="estilo_esquema", horizontal=True
     )
 idx_esquema = nombres.index(labor_a_graficar)
-dg_esquema = st.session_state.setdefault("datos_generales", DatosGenerales())
 if estilo_esquema == "Sólido":
     modo_anillos = st.radio(
         "Anillos de avance", ["Mensual", "Por disparo"], key="modo_anillos_esquema", horizontal=True,
@@ -407,14 +434,15 @@ st.caption(
     "Plantilla paramétrica de un round completo (alivios al centro, zonas "
     "en anillo arranque→ayuda→subayuda, contorno y arrastre sobre la "
     "sección real) — una estimación visual de referencia, no el diseño de "
-    "malla real de campo. El burden de arranque usa la regla empírica de "
-    "Holmberg (B₁ = 1.5 × Ø_alivio × √N.° alivios); el de las demás zonas "
-    "se escala desde B₁ con los factores de seguridad de Ojeda (2003) "
-    "— arranque 6, ayuda 5, subayuda 4, contorno 3, arrastre 2."
+    "malla real de campo. El corte sigue el método de Holmberg: B₁ = 1.5 × "
+    "Ø_alivio × √N.° alivios para el arranque, y cada sección siguiente abre "
+    "contra el vacío en diagonal de la anterior (B(n) = 1.5 × √2 × B(n-1)). "
+    "Contorno y arrastre ya no son parte del corte, así que se escalan desde "
+    "B₁ con los factores de seguridad de Ojeda (2003) — contorno 3, arrastre 2."
 )
 labor_malla = labores[idx_esquema]
-forma_malla = "Circular" if labor_malla.tipo in LABORES_VERTICALES else labor_malla.forma_seccion
-alto_malla = labor_malla.ancho_m if labor_malla.tipo in LABORES_VERTICALES else labor_malla.alto_m
+forma_malla = _forma_malla(labor_malla)
+alto_malla = _alto_malla(labor_malla)
 fig_malla, zonas_malla = build_malla_perforacion_figure(
     labor_malla.ancho_m, alto_malla, labor_malla.taladros_cargados, labor_malla.taladros_alivio,
     diametro_barreno_mm=labor_malla.diametro_barreno_mm, diametro_alivio_mm=labor_malla.diametro_alivio_mm,

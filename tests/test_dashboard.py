@@ -4,14 +4,10 @@ from core.models import LaborMinera, Polvorin, PuntoRiesgo
 from core.polvorin import evaluar_distancias
 from core.voladura import calcular_programa
 from viz.dashboard import (
-    fig_avance_tonelaje_por_labor,
     fig_distancias_vs_minima,
     fig_emr_por_polvorin,
     fig_estado_cumplimiento,
-    fig_explosivo_por_tipo,
-    fig_factor_potencia,
     fig_holgura_por_punto,
-    fig_tonelaje_por_etapa,
     kpis_polvorin,
     kpis_voladura,
 )
@@ -57,28 +53,6 @@ def test_kpis_voladura_usa_cociente_de_sumas_no_promedio_de_cocientes():
     # el promedio de los factores por labor da un valor distinto — este test
     # falla si alguien lo "simplifica" a un promedio.
     assert esperado != pytest.approx(promedio_de_cocientes)
-
-
-def test_figuras_voladura_se_construyen_con_datos():
-    labores = _labores()
-    resultados = calcular_programa(labores)
-    for constructor in (
-        fig_avance_tonelaje_por_labor, fig_tonelaje_por_etapa,
-        fig_explosivo_por_tipo, fig_factor_potencia,
-    ):
-        fig = constructor(labores, resultados)
-        assert fig.data, f"{constructor.__name__} no generó ninguna traza"
-
-
-def test_figuras_voladura_sin_labores_no_fallan():
-    for constructor in (
-        fig_avance_tonelaje_por_labor, fig_tonelaje_por_etapa,
-        fig_explosivo_por_tipo, fig_factor_potencia,
-    ):
-        fig = constructor([], [])
-        # sin datos se devuelve una figura con el mensaje explicativo,
-        # no una excepción ni un gráfico vacío sin contexto
-        assert fig.layout.annotations
 
 
 def _escenario_polvorin():
