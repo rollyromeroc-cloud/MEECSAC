@@ -27,7 +27,7 @@ COLOR_COTA_ANILLO = "#AA4499"
 COLOR_BORDE_TALADRO = "#22242A"
 COLOR_TRAZO_ANILLO = "#6B7280"
 
-_NOMBRE_CATEGORIA = {
+NOMBRE_CATEGORIA = {
     "alivio": "Alivio (sin carga)",
     "arranque": "Arranque",
     "ayuda": "Ayuda",
@@ -35,7 +35,7 @@ _NOMBRE_CATEGORIA = {
     "contorno": "Contorno",
     "arrastre": "Arrastre (zapatera)",
 }
-_COLOR_CATEGORIA = {
+COLOR_CATEGORIA = {
     "alivio": COLOR_ALIVIO,
     "arranque": COLOR_ARRANQUE,
     "ayuda": COLOR_AYUDA,
@@ -43,7 +43,7 @@ _COLOR_CATEGORIA = {
     "contorno": COLOR_CONTORNO_TALADRO,
     "arrastre": COLOR_ARRASTRE,
 }
-_ORDEN_CATEGORIAS = ("alivio", "arranque", "ayuda", "subayuda", "contorno", "arrastre")
+ORDEN_CATEGORIAS = ("alivio", "arranque", "ayuda", "subayuda", "contorno", "arrastre")
 
 
 def build_malla_perforacion_figure(
@@ -100,7 +100,7 @@ def build_malla_perforacion_figure(
             )
         )
 
-    for categoria in _ORDEN_CATEGORIAS:
+    for categoria in ORDEN_CATEGORIAS:
         puntos = [t for t in malla if t.categoria == categoria]
         if not puntos:
             continue
@@ -110,11 +110,11 @@ def build_malla_perforacion_figure(
                 y=[t.z for t in puntos],
                 mode="markers",
                 marker=dict(
-                    size=15, color=_COLOR_CATEGORIA[categoria], symbol="circle",
+                    size=15, color=COLOR_CATEGORIA[categoria], symbol="circle",
                     line=dict(width=1.5, color=COLOR_BORDE_TALADRO),
                 ),
-                name=f"{_NOMBRE_CATEGORIA[categoria]} ({len(puntos)})",
-                hovertext=[_NOMBRE_CATEGORIA[categoria] for _ in puntos],
+                name=f"{NOMBRE_CATEGORIA[categoria]} ({len(puntos)})",
+                hovertext=[NOMBRE_CATEGORIA[categoria] for _ in puntos],
                 hoverinfo="text",
             )
         )

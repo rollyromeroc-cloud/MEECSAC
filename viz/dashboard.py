@@ -9,18 +9,16 @@ No introduce ningún cálculo nuevo: todos los números salen de
 `core.voladura.calcular_programa` y `core.polvorin` (EMR y distancias),
 solo se agregan y se grafican.
 
-En Voladura solo se arman los KPI: el tablero muestra los esquemas 2D y 3D
-de cada labor (`viz.tunnel_plot` y `viz.malla_plot`), que es lo que se usa
-en un informe OTS — no gráficos de barras de tonelaje o factor de potencia,
-que no forman parte de ese entregable.
+La plataforma no usa gráficos de barras: no forman parte de un informe OTS.
+En Voladura el tablero son los KPI más los esquemas 2D y 3D de cada labor
+(`viz.tunnel_plot` y `viz.malla_plot`); en Polvorín, los KPI más el reparto
+de cumplimiento, y el detalle de distancias va en su tabla.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 
-import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 
 from core.models import LaborMinera, Polvorin, PuntoRiesgo, ResultadoDistancia, ResultadoVoladura
@@ -127,106 +125,6 @@ def kpis_polvorin(
             ayuda="Contra la distancia mínima que confirmaste en cada punto de riesgo, no contra la sugerencia de la Tabla K.",
         ),
     ]
-
-
-def fig_distancias_vs_minima(
-    resultados_por_polvorin: dict[str, list[ResultadoDistancia]],
-) -> go.Figure:
-    """Distancia real vs. la mínima requerida, por par polvorín–punto. La
-    barra se colorea por cumplimiento y la mínima va como marcador, para
-    que la brecha se lea directamente."""
-    filas = [
-        {
-            "Par": f"{nombre} → {r.punto_nombre}",
-            "Real (m)": r.distancia_real_m,
-            "Mínima (m)": r.distancia_minima_m,
-            "Estado": "Cumple" if r.cumple else "No cumple",
-        }
-        for nombre, lista in resultados_por_polvorin.items()
-        for r in lista
-    ]
-    if not filas:
-        return _fig_vacia("Sin puntos de riesgo registrados")
-    df = pd.DataFrame(filas).sort_values("Real (m)")
-    fig = go.Figure()
-    fig.add_trace(
-        go.Bar(
-            x=df["Real (m)"], y=df["Par"], orientation="h", name="Distancia real",
-            marker_color=[COLOR_OK if e == "Cumple" else COLOR_ALERTA for e in df["Estado"]],
-            hovertemplate="%{y}<br>Real: %{x:,.2f} m<extra></extra>",
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df["Mínima (m)"], y=df["Par"], mode="markers", name="Mínima requerida",
-            marker=dict(symbol="line-ns", size=16, line=dict(color=MEECSAC_DARK, width=3)),
-            hovertemplate="%{y}<br>Mínima: %{x:,.2f} m<extra></extra>",
-        )
-    )
-    fig.update_layout(
-        template=_PLANTILLA, title="Distancia real vs. mínima requerida",
-        xaxis=dict(title="Distancia (m)"), yaxis=dict(title=""),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-        margin=dict(l=10, r=10, t=60, b=10),
-        height=max(320, 40 * len(df) + 120),
-    )
-    return fig
-
-
-def fig_holgura_por_punto(
-    resultados_por_polvorin: dict[str, list[ResultadoDistancia]],
-) -> go.Figure:
-    """Holgura (distancia real − mínima) por par: negativa = incumplimiento
-    y cuánto falta, positiva = margen disponible."""
-    filas = [
-        {
-            "Par": f"{nombre} → {r.punto_nombre}",
-            "Holgura (m)": r.distancia_real_m - r.distancia_minima_m,
-        }
-        for nombre, lista in resultados_por_polvorin.items()
-        for r in lista
-    ]
-    if not filas:
-        return _fig_vacia("Sin puntos de riesgo registrados")
-    df = pd.DataFrame(filas).sort_values("Holgura (m)")
-    fig = go.Figure(
-        go.Bar(
-            x=df["Holgura (m)"], y=df["Par"], orientation="h",
-            marker_color=[COLOR_OK if v >= 0 else COLOR_ALERTA for v in df["Holgura (m)"]],
-            hovertemplate="%{y}<br>Holgura: %{x:,.2f} m<extra></extra>",
-        )
-    )
-    fig.add_vline(x=0, line_color=MEECSAC_DARK, line_width=1)
-    fig.update_layout(
-        template=_PLANTILLA, title="Holgura sobre la distancia mínima",
-        xaxis=dict(title="Metros (negativo = incumple)"), yaxis=dict(title=""),
-        showlegend=False, margin=dict(l=10, r=10, t=60, b=10),
-        height=max(320, 40 * len(df) + 120),
-    )
-    return fig
-
-
-def fig_emr_por_polvorin(polvorines: list[Polvorin]) -> go.Figure:
-    """EMR (kg equivalente dinamita 60%) de cada polvorín con composición
-    registrada — los que no la tienen se omiten, no se dibujan en 0."""
-    filas = [
-        {"Polvorín": p.nombre, "EMR (kg)": emr, "Tipo": p.tipo}
-        for p, emr in ((p, emr_kg_polvorin(p)) for p in polvorines)
-        if emr is not None
-    ]
-    if not filas:
-        return _fig_vacia("Ningún polvorín tiene composición registrada todavía")
-    df = pd.DataFrame(filas).sort_values("EMR (kg)", ascending=False)
-    fig = px.bar(
-        df, x="Polvorín", y="EMR (kg)", color="Tipo",
-        title="EMR por polvorín (kg equiv. dinamita 60%)",
-        color_discrete_map={"Explosivos": COLOR_ALERTA, "Accesorios": MEECSAC_CYAN},
-    )
-    fig.update_layout(
-        template=_PLANTILLA, margin=dict(l=10, r=10, t=60, b=10), height=340,
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0),
-    )
-    return fig
 
 
 def fig_estado_cumplimiento(

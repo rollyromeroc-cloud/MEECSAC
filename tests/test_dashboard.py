@@ -3,14 +3,7 @@ import pytest
 from core.models import LaborMinera, Polvorin, PuntoRiesgo
 from core.polvorin import evaluar_distancias
 from core.voladura import calcular_programa
-from viz.dashboard import (
-    fig_distancias_vs_minima,
-    fig_emr_por_polvorin,
-    fig_estado_cumplimiento,
-    fig_holgura_por_punto,
-    kpis_polvorin,
-    kpis_voladura,
-)
+from viz.dashboard import fig_estado_cumplimiento, kpis_polvorin, kpis_voladura
 
 
 def _labores() -> list[LaborMinera]:
@@ -99,14 +92,31 @@ def test_kpis_polvorin_cumplimiento_sobre_el_total_de_verificaciones():
     assert kpis["Cumplimiento"] == f"{cumplen / 4 * 100:,.1f} %"
 
 
-def test_figuras_polvorin_se_construyen_con_datos():
-    polvorines, _, resultados = _escenario_polvorin()
-    assert fig_emr_por_polvorin(polvorines).data
-    for constructor in (fig_distancias_vs_minima, fig_holgura_por_punto, fig_estado_cumplimiento):
-        assert constructor(resultados).data, f"{constructor.__name__} no generó ninguna traza"
+def test_figura_cumplimiento_se_construye_con_datos():
+    _, _, resultados = _escenario_polvorin()
+    assert fig_estado_cumplimiento(resultados).data
 
 
-def test_figuras_polvorin_sin_datos_no_fallan():
-    assert fig_emr_por_polvorin([]).layout.annotations
-    for constructor in (fig_distancias_vs_minima, fig_holgura_por_punto, fig_estado_cumplimiento):
-        assert constructor({}).layout.annotations
+def test_figura_cumplimiento_sin_datos_no_falla():
+    # sin datos se devuelve una figura con el mensaje explicativo, no una
+    # excepción ni un gráfico vacío sin contexto
+    assert fig_estado_cumplimiento({}).layout.annotations
+
+
+def test_la_plataforma_no_usa_graficos_de_barras():
+    # guardia de regresión: los gráficos de barras no forman parte de un
+    # informe OTS y se retiraron de toda la plataforma.
+    import plotly.graph_objects as go
+
+    import viz.dashboard as dashboard
+
+    polvorines, puntos, resultados = _escenario_polvorin()
+    figuras = [fig_estado_cumplimiento(resultados)]
+    labores = _labores()
+    assert not any(
+        isinstance(traza, go.Bar) for fig in figuras for traza in fig.data
+    )
+    # y el módulo ya no expone ningún constructor de barras
+    assert not [n for n in vars(dashboard) if n.startswith("fig_") and "barra" in n]
+    assert kpis_voladura(labores, calcular_programa(labores))
+    assert kpis_polvorin(polvorines, puntos, resultados)

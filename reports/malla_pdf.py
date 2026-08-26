@@ -19,11 +19,9 @@ from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Tabl
 from reportlab.lib.styles import ParagraphStyle
 
 from core.constants import LABORES_VERTICALES
-from core.malla_perforacion import ZonaInfo
+from core.malla_perforacion import ZonaInfo, generar_malla_perforacion
 from core.models import DatosGenerales, LaborMinera, ResultadoVoladura
-from viz.malla_plot import build_malla_perforacion_figure
-
-import plotly.graph_objects as go
+from reports.malla_drawing import build_malla_drawing
 
 LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_meecsac.jpg"
 PAGE_SIZE = landscape(A3)
@@ -108,39 +106,33 @@ def build_malla_pdf(
     labor: LaborMinera,
     resultado: ResultadoVoladura,
     datos: DatosGenerales | None = None,
-    fig: go.Figure | None = None,
     zonas: list[ZonaInfo] | None = None,
 ) -> BytesIO:
     """Genera la ficha PDF A3 apaisada de la malla de perforación de
     `labor`. Devuelve un BytesIO listo para `st.download_button`.
 
-    `fig`/`zonas`, si el llamador ya los calculó (p. ej. para mostrar la
-    malla en pantalla), se reutilizan tal cual en vez de recalcularlos —
-    evita repetir la generación de la malla dos veces por cada render."""
+    `zonas`, si el llamador ya las calculó (p. ej. para mostrar la tabla de
+    distancias en pantalla), se reutilizan en vez de recalcularlas."""
     datos = datos or DatosGenerales()
     es_vertical = labor.tipo in LABORES_VERTICALES
     forma = "Circular" if es_vertical else labor.forma_seccion
     alto_malla = labor.ancho_m if es_vertical else labor.alto_m
 
-    if fig is None or zonas is None:
-        fig, zonas = build_malla_perforacion_figure(
-            labor.ancho_m, alto_malla, labor.taladros_cargados, labor.taladros_alivio,
-            diametro_barreno_mm=labor.diametro_barreno_mm, diametro_alivio_mm=labor.diametro_alivio_mm,
-            forma_seccion=forma, nombre_labor=labor.nombre,
-        )
-    try:
-        png_bytes = fig.to_image(format="png", width=1100, height=950, scale=2)
-        imagen_malla: Image | Paragraph = Image(BytesIO(png_bytes), width=150 * mm, height=130 * mm)
-    except Exception:
-        # el entorno de despliegue puede no tener lo necesario para exportar
-        # gráficos Plotly a PNG (p. ej. Chrome, requerido por kaleido>=1) —
-        # se degrada a una nota en vez de romper toda la ficha (mismo
-        # criterio que reports.docx_builder para el esquema 3D del Word).
-        imagen_malla = Paragraph(
-            "(Imagen de la malla no disponible en este entorno — sigue disponible la "
-            "tabla de distancias por zona más abajo)",
-            _ESTILO_NOTA,
-        )
+    taladros, zonas_calculadas = generar_malla_perforacion(
+        labor.ancho_m, alto_malla, labor.taladros_cargados, labor.taladros_alivio,
+        diametro_barreno_mm=labor.diametro_barreno_mm,
+        diametro_alivio_mm=labor.diametro_alivio_mm,
+        forma_seccion=forma,
+    )
+    zonas = zonas if zonas is not None else zonas_calculadas
+    # la malla se dibuja en vector con reportlab, no exportando la figura de
+    # Plotly a PNG: to_image() necesita kaleido (y, desde kaleido>=1, un
+    # Chrome instalado) y en Python 3.14 se cuelga en vez de lanzar, así que
+    # ni un try/except evitaría que la descarga congele la sesión.
+    imagen_malla = build_malla_drawing(
+        taladros, zonas, labor.ancho_m, alto_malla, forma,
+        ancho_pt=150 * mm, alto_pt=130 * mm,
+    )
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -246,9 +238,11 @@ def build_malla_pdf(
 
     nota = Paragraph(
         "Malla paramétrica de referencia (ver core.malla_perforacion) — no es un diseño certificado de campo, "
-        "requiere validación por un ingeniero responsable antes de su ejecución. Burden de arranque: regla de "
-        "Holmberg (1982); escalado por zona: factores de seguridad de Ojeda Mestas, R.W. (IV CONEINGEMMET, "
-        "Huancayo, 2003). Generado con la app de perforación y voladura de MEECSAC.",
+        "requiere validación por un ingeniero responsable antes de su ejecución. Corte por el método de "
+        "Holmberg (1982): B₁ = 1.5 × Ø_alivio × √N.° alivios, y cada sección siguiente abre contra el vacío en "
+        "diagonal de la anterior (B(n) = 1.5 × √2 × B(n-1)). Contorno y arrastre, que ya no son parte del corte, "
+        "se escalan desde B₁ con los factores de seguridad de Ojeda Mestas, R.W. (IV CONEINGEMMET, Huancayo, "
+        "2003). Generado con la app de perforación y voladura de MEECSAC.",
         _ESTILO_NOTA,
     )
 

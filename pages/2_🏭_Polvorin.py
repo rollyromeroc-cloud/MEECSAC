@@ -25,13 +25,7 @@ from core.polvorin import (
 )
 from reports.docx_builder import build_polvorin_report
 from reports.mapa_pdf import build_mapa_pdf
-from viz.dashboard import (
-    fig_distancias_vs_minima,
-    fig_emr_por_polvorin,
-    fig_estado_cumplimiento,
-    fig_holgura_por_punto,
-    kpis_polvorin,
-)
+from viz.dashboard import fig_estado_cumplimiento, kpis_polvorin
 
 st.set_page_config(page_title="Polvorín", page_icon=str(LOGO_PATH), layout="wide")
 require_login()
@@ -170,6 +164,68 @@ if not polvorines:
 
 resultados_por_polvorin = {p.nombre: evaluar_distancias(p, puntos) for p in polvorines}
 
+
+def construir_mapa() -> folium.Map:
+    """Mapa interactivo con polvorines, cercos, radios de influencia y las
+    líneas de distancia a cada punto de riesgo. Lo usan tanto la vista
+    Detalle como el tablero, así que se arma una sola vez aquí en vez de
+    duplicar el trazado en cada rama."""
+    lat0, lon0 = utm_a_lonlat(polvorines[0].este_utm, polvorines[0].norte_utm)
+    mapa = folium.Map(location=[lat0, lon0], zoom_start=14)
+
+    for polvorin in polvorines:
+        lat, lon = utm_a_lonlat(polvorin.este_utm, polvorin.norte_utm)
+        folium.Marker(
+            [lat, lon],
+            tooltip=f"{polvorin.tipo}: {polvorin.nombre}",
+            icon=folium.Icon(color="red", icon="warning-sign"),
+        ).add_to(mapa)
+        if polvorin.vertices_cerco:
+            cerco_latlon = [utm_a_lonlat(e, n) for e, n in polvorin.vertices_cerco]
+            folium.Polygon(cerco_latlon, color="red", weight=2, fill=True, fill_opacity=0.1).add_to(mapa)
+        if polvorin.radio_influencia_m:
+            folium.Circle(
+                [lat, lon],
+                radius=polvorin.radio_influencia_m,
+                color="#2CA02C",
+                weight=2,
+                dash_array="6",
+                fill=False,
+                tooltip=f"Radio de influencia: {polvorin.radio_influencia_m:,.2f} m",
+            ).add_to(mapa)
+
+    for punto in puntos:
+        lat, lon = utm_a_lonlat(punto.este_utm, punto.norte_utm)
+        folium.Marker(
+            [lat, lon],
+            tooltip=f"{punto.tipo}: {punto.nombre}",
+            icon=folium.Icon(color="blue", icon="info-sign"),
+        ).add_to(mapa)
+        for polvorin in polvorines:
+            lat_p, lon_p = utm_a_lonlat(polvorin.este_utm, polvorin.norte_utm)
+            resultado = next(
+                (
+                    r for r in resultados_por_polvorin[polvorin.nombre]
+                    if r.punto_nombre == punto.nombre
+                ),
+                None,
+            )
+            if resultado is not None:
+                folium.PolyLine(
+                    [[lat_p, lon_p], [lat, lon]],
+                    # el color dice de un vistazo si ese par cumple o no,
+                    # igual que en el plano cartográfico
+                    color="#2A9D8F" if resultado.cumple else "#E63946",
+                    weight=1.5,
+                    dash_array="4",
+                    tooltip=(
+                        f"{resultado.distancia_real_m:,.0f} m "
+                        f"(mínima {resultado.distancia_minima_m:,.0f} m)"
+                    ),
+                ).add_to(mapa)
+    return mapa
+
+
 vista = st.segmented_control(
     "Vista", ["Detalle", "Dashboard"], default="Detalle", key="vista_polvorin",
     label_visibility="collapsed",
@@ -182,32 +238,19 @@ if vista == "Dashboard":
             columna.metric(
                 f"{kpi.icono} {kpi.etiqueta}", kpi.valor, border=True, help=kpi.ayuda,
             )
-    # `key` explícita en cada gráfico: sin ella Streamlit deriva el id del
-    # elemento de sus parámetros, y cuando todavía no hay puntos de riesgo
-    # varias de estas figuras son idénticas (la misma figura vacía "Sin
-    # puntos de riesgo registrados") — mismo id, StreamlitDuplicateElementId.
-    c1, c2 = st.columns(2)
-    c1.plotly_chart(
-        fig_emr_por_polvorin(polvorines), use_container_width=True, key="dash_pol_emr",
-    )
-    if puntos:
-        c2.plotly_chart(
-            fig_estado_cumplimiento(resultados_por_polvorin),
-            use_container_width=True, key="dash_pol_cumplimiento",
-        )
-        st.plotly_chart(
-            fig_distancias_vs_minima(resultados_por_polvorin),
-            use_container_width=True, key="dash_pol_distancias",
-        )
-        st.plotly_chart(
-            fig_holgura_por_punto(resultados_por_polvorin),
-            use_container_width=True, key="dash_pol_holgura",
-        )
-    else:
-        # los tres gráficos de distancias dirían exactamente lo mismo
-        # ("sin puntos de riesgo"); un solo aviso comunica igual y no
-        # llena el tablero de recuadros vacíos repetidos.
-        c2.info("Agrega puntos de riesgo para ver el cumplimiento de distancias.")
+    col_mapa, col_estado = st.columns([2, 1])
+    with col_mapa:
+        st_folium(construir_mapa(), use_container_width=True, height=420, key="mapa_dashboard")
+    with col_estado:
+        if puntos:
+            # `key` explícita: sin ella Streamlit deriva el id del elemento
+            # de sus parámetros y dos figuras iguales colisionarían.
+            st.plotly_chart(
+                fig_estado_cumplimiento(resultados_por_polvorin),
+                use_container_width=True, key="dash_pol_cumplimiento",
+            )
+        else:
+            st.info("Agrega puntos de riesgo para ver el cumplimiento de distancias.")
     st.caption(
         "El cumplimiento se evalúa contra la distancia mínima que confirmaste en cada punto "
         "de riesgo, no contra la sugerencia de la Tabla K — cambia a Detalle para ver ambas, "
@@ -274,55 +317,7 @@ if puntos:
         st.rerun()
 
 st.header(":material/map: Mapa", divider="gray")
-lat0, lon0 = utm_a_lonlat(polvorines[0].este_utm, polvorines[0].norte_utm)
-mapa = folium.Map(location=[lat0, lon0], zoom_start=14)
-
-for polvorin in polvorines:
-    lat, lon = utm_a_lonlat(polvorin.este_utm, polvorin.norte_utm)
-    folium.Marker(
-        [lat, lon],
-        tooltip=f"{polvorin.tipo}: {polvorin.nombre}",
-        icon=folium.Icon(color="red", icon="warning-sign"),
-    ).add_to(mapa)
-    if polvorin.vertices_cerco:
-        cerco_latlon = [utm_a_lonlat(e, n) for e, n in polvorin.vertices_cerco]
-        folium.Polygon(cerco_latlon, color="red", weight=2, fill=True, fill_opacity=0.1).add_to(mapa)
-    if polvorin.radio_influencia_m:
-        folium.Circle(
-            [lat, lon],
-            radius=polvorin.radio_influencia_m,
-            color="#2CA02C",
-            weight=2,
-            dash_array="6",
-            fill=False,
-            tooltip=f"Radio de influencia: {polvorin.radio_influencia_m:,.2f} m",
-        ).add_to(mapa)
-
-for punto in puntos:
-    lat, lon = utm_a_lonlat(punto.este_utm, punto.norte_utm)
-    folium.Marker(
-        [lat, lon],
-        tooltip=f"{punto.tipo}: {punto.nombre}",
-        icon=folium.Icon(color="blue", icon="info-sign"),
-    ).add_to(mapa)
-    for polvorin in polvorines:
-        lat_p, lon_p = utm_a_lonlat(polvorin.este_utm, polvorin.norte_utm)
-        distancia = next(
-            (
-                r.distancia_real_m
-                for r in resultados_por_polvorin[polvorin.nombre]
-                if r.punto_nombre == punto.nombre
-            ),
-            None,
-        )
-        if distancia is not None:
-            folium.PolyLine(
-                [[lat_p, lon_p], [lat, lon]],
-                color="gray",
-                weight=1,
-                dash_array="4",
-                tooltip=f"{distancia:,.0f} m",
-            ).add_to(mapa)
+st_folium(construir_mapa(), use_container_width=True, height=500, key="mapa_detalle")
 
 polvorines_con_radio = [p for p in polvorines if p.radio_influencia_m]
 if polvorines_con_radio:
@@ -337,8 +332,6 @@ if polvorines_con_radio:
         use_container_width=True,
         hide_index=True,
     )
-
-st_folium(mapa, use_container_width=True, height=500)
 
 st.header(":material/public: Plano y exportación geoespacial", divider="gray")
 st.write(

@@ -4,7 +4,6 @@ import math
 from pathlib import Path
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 from auth import require_login
@@ -55,11 +54,6 @@ st.set_page_config(page_title="Voladura", page_icon=str(LOGO_PATH), layout="wide
 require_login()
 st.logo(str(LOGO_PATH), size="large")
 st.session_state.setdefault("labores", [])
-
-# Paleta categórica fija (2 series: explosivo tipo 1 / tipo 2) — colorblind-safe
-# (Plotly "Safe", basada en Okabe-Ito). No se cicla ni se reordena.
-COLOR_TIPO1 = "#88CCEE"
-COLOR_TIPO2 = "#CC6677"
 
 st.title(":material/explosion: Cálculo de perforación y voladura")
 st.write(
@@ -522,7 +516,7 @@ with st.expander(":material/thermostat: Isotiempos de detonación"):
 st.markdown("**Ficha de malla en PDF**")
 pdf_malla_bytes = build_malla_pdf(
     labor_malla, resultados[idx_esquema], st.session_state.get("datos_generales"),
-    fig=fig_malla, zonas=zonas_malla,
+    zonas=zonas_malla,
 )
 st.download_button(
     "Descargar ficha de malla (PDF A3)",
@@ -688,52 +682,6 @@ tabla_memoria = pd.DataFrame(
     ]
 )
 st.dataframe(tabla_memoria, use_container_width=True, hide_index=True)
-
-st.header(":material/bar_chart: Gráficos", divider="gray")
-
-col_a, col_b = st.columns(2)
-
-with col_a:
-    fig_avance = px.bar(
-        tabla,
-        x="Labor",
-        y="Longitud programa (m)",
-        color="Etapa",
-        title="Longitud programada por labor",
-    )
-    fig_avance.update_layout(yaxis_title="Longitud programa (m)", xaxis_title=None)
-    st.plotly_chart(fig_avance, use_container_width=True)
-
-with col_b:
-    explosivos_df = pd.DataFrame(
-        {
-            "Labor": [labor.nombre for labor in labores] * 2,
-            "Tipo": [labor.tipo_explosivo_1 for labor in labores]
-            + [labor.tipo_explosivo_2 for labor in labores],
-            "Explosivo (kg)": [r.explosivo_tipo1_kg for r in resultados]
-            + [r.explosivo_tipo2_kg for r in resultados],
-        }
-    )
-    fig_exp = px.bar(
-        explosivos_df,
-        x="Labor",
-        y="Explosivo (kg)",
-        color="Tipo",
-        title="Consumo de explosivo por labor",
-        color_discrete_sequence=[COLOR_TIPO1, COLOR_TIPO2],
-    )
-    fig_exp.update_layout(yaxis_title="Explosivo (kg)", xaxis_title=None)
-    st.plotly_chart(fig_exp, use_container_width=True)
-
-fig_tonelaje = px.bar(
-    tabla,
-    x="Labor",
-    y="Tonelaje total (TM)",
-    color="Etapa",
-    title="Tonelaje total por labor",
-)
-fig_tonelaje.update_layout(yaxis_title="Tonelaje (TM)", xaxis_title=None)
-st.plotly_chart(fig_tonelaje, use_container_width=True)
 
 st.header(":material/description: Reporte", divider="gray")
 titulo_proyecto = st.text_input("Título del proyecto para el reporte", value="Programa de perforación y voladura")

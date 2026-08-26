@@ -5,7 +5,6 @@ import json
 from pathlib import Path
 
 import pandas as pd
-import plotly.express as px
 import streamlit as st
 
 from auth import require_login
@@ -63,26 +62,8 @@ if labores:
     df["Avance acumulado (m)"] = df["Avance (m)"].cumsum()
     df["Tonelaje acumulado (TM)"] = df["Tonelaje (TM)"].cumsum()
 
-    st.subheader(":material/show_chart: Avance y tonelaje acumulado del programa")
-    fig = px.line(
-        df,
-        x="Labor",
-        y="Avance acumulado (m)",
-        markers=True,
-        title="Avance acumulado por labor (ordenado por etapa)",
-    )
-    fig.update_layout(xaxis_title=None)
-    st.plotly_chart(fig, use_container_width=True)
-
-    st.subheader(":material/bar_chart: Distribución de tonelaje por etapa")
-    fig2 = px.bar(
-        df,
-        x="Etapa",
-        y="Tonelaje (TM)",
-        color="Etapa",
-        title="Tonelaje total por etapa del programa",
-    )
-    st.plotly_chart(fig2, use_container_width=True)
+    st.subheader(":material/table_view: Programa consolidado por labor")
+    st.dataframe(df, use_container_width=True, hide_index=True)
 else:
     st.info("Aún no hay labores registradas. Ve a la sección '🧨 Voladura' para agregar la primera.")
 
