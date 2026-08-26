@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import folium
@@ -13,7 +14,8 @@ from auth import require_login
 LOGO_PATH = Path(__file__).resolve().parent.parent / "assets" / "logo_meecsac.jpg"
 from core.constants import HEMISFERIO_DEFAULT, TIPOS_PUNTO_RIESGO, ZONA_UTM_DEFAULT
 from core.emr import FACTORES_DIN60
-from core.models import Polvorin, PuntoRiesgo
+from core.geoexport import construir_geojson, construir_shapefile_zip, epsg_utm
+from core.models import DatosGenerales, Polvorin, PuntoRiesgo
 from core.polvorin import (
     area_shoelace,
     distancia_sugerida_tabla_k_m,
@@ -22,6 +24,7 @@ from core.polvorin import (
     perimetro,
 )
 from reports.docx_builder import build_polvorin_report
+from reports.mapa_pdf import build_mapa_pdf
 from viz.dashboard import (
     fig_distancias_vs_minima,
     fig_emr_por_polvorin,
@@ -315,6 +318,57 @@ if polvorines_con_radio:
     )
 
 st_folium(mapa, use_container_width=True, height=500)
+
+st.header(":material/public: Plano y exportación geoespacial", divider="gray")
+st.write(
+    "Descarga el plano cartográfico a escala (grilla UTM, norte, escala gráfica, "
+    "leyenda y cajetín) o las capas para subirlas a un geoportal / abrirlas en QGIS."
+)
+dg_polvorin = st.session_state.setdefault("datos_generales", DatosGenerales())
+
+c_mapa, c_shp, c_geojson = st.columns(3)
+with c_mapa:
+    st.download_button(
+        "Plano cartográfico (PDF A3)",
+        data=build_mapa_pdf(
+            polvorines, puntos, resultados_por_polvorin, zona_utm, hemisferio, dg_polvorin,
+        ),
+        file_name="plano_seguridad_polvorin.pdf",
+        mime="application/pdf",
+        icon=":material/map:",
+        type="primary",
+        use_container_width=True,
+    )
+with c_shp:
+    st.download_button(
+        "Capas shapefile (ZIP)",
+        data=construir_shapefile_zip(
+            polvorines, puntos, resultados_por_polvorin, zona_utm, hemisferio,
+        ),
+        file_name="polvorin_shapefile.zip",
+        mime="application/zip",
+        icon=":material/layers:",
+        use_container_width=True,
+    )
+with c_geojson:
+    st.download_button(
+        "Capas GeoJSON",
+        data=json.dumps(
+            construir_geojson(
+                polvorines, puntos, resultados_por_polvorin, zona_utm, hemisferio,
+            ),
+            ensure_ascii=False, indent=2,
+        ).encode("utf-8"),
+        file_name="polvorin.geojson",
+        mime="application/geo+json",
+        icon=":material/travel_explore:",
+        use_container_width=True,
+    )
+st.caption(
+    f"Shapefile en UTM zona {zona_utm}{hemisferio} (EPSG:{epsg_utm(zona_utm, hemisferio)}) con su "
+    ".prj, que es lo que espera un geoportal; el GeoJSON va en lon/lat WGS 84 porque el formato lo "
+    "exige. Los datos del cajetín se completan en 'Datos generales del informe' de la página de Voladura."
+)
 
 st.header(":material/description: Reporte", divider="gray")
 titulo_proyecto_p = st.text_input(

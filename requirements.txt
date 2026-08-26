@@ -21,3 +21,5 @@ Pillow>=10.0
 ezdxf>=1.1,<2.0
 reportlab>=4.0
 scipy>=1.11
+# pyshp: escribe shapefile en Python puro, sin GDAL (que no hay en Streamlit Cloud)
+pyshp>=2.3,<4.0
