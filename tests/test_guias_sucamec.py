@@ -109,6 +109,63 @@ def test_generar_zip_guias_dos_variantes_no_se_combinan():
         assert ws2["S48"].value != resolucion_propia_t2
 
 
+def test_resolucion_de_cabecera_aparece_en_los_dos_tipos_de_guia():
+    # La resolución de gerencia encabeza cada guía (celda AE11, sección I) y
+    # ese bloque existe en LOS DOS formatos: antes solo se escribía el bloque
+    # de destino del tipo 2 y la resolución del usuario salía en un solo tipo.
+    zip_buffer, _ = generar_zip_guias([_producto_emulsion("Emulnor 3000")])
+    esperada = "N° 01463-2026-SUCAMEC/DEPP-SDAEPP"
+    with ZipFile(BytesIO(zip_buffer.getvalue())) as zf:
+        for prefijo in ("TIPO1_", "TIPO2_"):
+            nombre = next(n for n in zf.namelist() if n.startswith(prefijo))
+            ws = openpyxl.load_workbook(BytesIO(zf.read(nombre))).active
+            assert ws["AE11"].value == esperada, f"{prefijo} no trae la resolución de cabecera"
+
+
+def test_direccion_de_origen_solo_sobreescribe_el_tipo1():
+    # El origen del tipo 1 es la planta del fabricante (FAMESA); el del tipo 2
+    # es el propio polvorín — misma celda, otra entidad, así que estos campos
+    # no deben pisar el origen del tipo 2.
+    polvorin = PolvorinGuiaSucamec(
+        nombre="Polvorín propio",
+        origen_direccion="MI PLANTA KM 12",
+        origen_distrito="MIDISTRITO",
+        origen_provincia="MIPROVINCIA",
+        origen_departamento="MIREGION",
+    )
+    producto = ProductoGuia(
+        nombre_variante="Emulnor 3000", categoria="Explosivos",
+        producto_sucamec="EMULSIÓN O HIDROGEL ENCARTUCHADA",
+        cantidad_solicitada=525, capacidad_por_guia=575, unidad_abrev="kg",
+        polvorin=polvorin,
+    )
+    origen_original_t2 = _valor_original(PLANTILLA_GUIA_TIPO2, "E40")
+    zip_buffer, _ = generar_zip_guias([producto])
+    with ZipFile(BytesIO(zip_buffer.getvalue())) as zf:
+        ws1 = openpyxl.load_workbook(
+            BytesIO(zf.read(next(n for n in zf.namelist() if n.startswith("TIPO1_"))))
+        ).active
+        assert ws1["E40"].value == "MI PLANTA KM 12"
+        assert ws1["E44"].value == "MIDISTRITO"
+        assert ws1["S44"].value == "MIPROVINCIA"
+        assert ws1["AE44"].value == "MIREGION"
+
+        ws2 = openpyxl.load_workbook(
+            BytesIO(zf.read(next(n for n in zf.namelist() if n.startswith("TIPO2_"))))
+        ).active
+        assert ws2["E40"].value == origen_original_t2
+
+
+def test_origen_vacio_conserva_la_direccion_de_la_plantilla():
+    origen_original_t1 = _valor_original(PLANTILLA_GUIA_TIPO1["Explosivos"], "E40")
+    zip_buffer, _ = generar_zip_guias([_producto_emulsion("Emulnor 3000")])
+    with ZipFile(BytesIO(zip_buffer.getvalue())) as zf:
+        ws = openpyxl.load_workbook(
+            BytesIO(zf.read(next(n for n in zf.namelist() if n.startswith("TIPO1_"))))
+        ).active
+        assert ws["E40"].value == origen_original_t1
+
+
 def test_resolucion_gerencia_vacia_no_sobreescribe_bloque_destino():
     # Si la solicitud no trae resolucion de gerencia, el bloque destino
     # (limpiado en la plantilla) se queda vacio en vez de heredar algo.

@@ -246,3 +246,9 @@ class PolvorinGuiaSucamec:
     concesion_departamento: str = ""
     resolucion_gerencia_numero: str = ""
     resolucion_gerencia_fecha: str = ""  # texto "DD/MM/AAAA"
+    # Direccion de la planta de origen del TIPO 1 (FAMESA por defecto).
+    # Vacio = se respeta lo que ya trae la plantilla.
+    origen_direccion: str = ""
+    origen_distrito: str = ""
+    origen_provincia: str = ""
+    origen_departamento: str = ""

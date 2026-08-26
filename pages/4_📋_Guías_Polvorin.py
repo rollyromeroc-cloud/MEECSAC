@@ -41,11 +41,11 @@ st.caption(
 st.divider()
 st.markdown("### Solicitudes")
 st.caption(
-    "El polvorín no se pide como dato: la dirección y la resolución de subdirección de "
-    "FAMESA (Huaral) ya están correctas en la plantilla por defecto de la app. Por cada "
-    "solicitud completa la concesión de destino y la resolución de gerencia relacionada "
-    "con esa solicitud (bloque de autorización excepcional del Excel tipo 2). Solo sube "
-    "tus propias plantillas si usas un polvorín distinto a FAMESA (Huaral)."
+    "La plantilla por defecto ya trae la dirección y la resolución de subdirección de "
+    "FAMESA (Huaral). Por cada solicitud completa la concesión de destino y la resolución "
+    "de gerencia, que encabeza los dos tipos de guía. Si tu planta de origen no es la de "
+    "la plantilla, puedes sobreescribir su dirección abajo; sube tus propias plantillas "
+    "solo si necesitas cambiar algo más del formato."
 )
 
 n_polvorines = st.number_input(
@@ -61,6 +61,10 @@ for i in range(int(n_polvorines)):
         )
 
         st.markdown("**N.° de resolución de gerencia relacionada con la solicitud**")
+        st.caption(
+            "Encabeza las dos guías (sección I del formato) y además llena el bloque de "
+            "autorización excepcional del destino en el tipo 2."
+        )
         rg1, rg2 = st.columns(2)
         resolucion_gerencia_numero = rg1.text_input(
             "N.° de resolución", key=f"polv_res_ger_num_{i}",
@@ -70,6 +74,17 @@ for i in range(int(n_polvorines)):
             "Fecha de emisión (DD/MM/AAAA)", key=f"polv_res_ger_fecha_{i}",
             placeholder="Ej. 12/05/2026",
         )
+
+        st.markdown("**Planta de origen del tipo 1 (FAMESA por defecto)**")
+        st.caption("Déjalo vacío para conservar la dirección que ya trae la plantilla.")
+        origen_direccion = st.text_input(
+            "Dirección de origen", key=f"polv_origen_dir_{i}",
+            placeholder="Ej. KM 57 DE LA PANAMERICANA NORTE INCAPAMPA",
+        )
+        od1, od2, od3 = st.columns(3)
+        origen_distrito = od1.text_input("Distrito de origen", key=f"polv_origen_distrito_{i}")
+        origen_provincia = od2.text_input("Provincia de origen", key=f"polv_origen_provincia_{i}")
+        origen_departamento = od3.text_input("Región/Depto. de origen", key=f"polv_origen_departamento_{i}")
 
         st.markdown("**Concesión / unidad minera de destino**")
         cm1, cm2 = st.columns(2)
@@ -105,6 +120,10 @@ for i in range(int(n_polvorines)):
             concesion_departamento=concesion_departamento,
             resolucion_gerencia_numero=resolucion_gerencia_numero,
             resolucion_gerencia_fecha=resolucion_gerencia_fecha,
+            origen_direccion=origen_direccion,
+            origen_distrito=origen_distrito,
+            origen_provincia=origen_provincia,
+            origen_departamento=origen_departamento,
         )
         polvorines[polvorin.nombre] = polvorin
 

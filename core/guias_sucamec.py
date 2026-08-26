@@ -87,6 +87,39 @@ def _rellenar_producto(ws, producto: str, cantidad: float, unidad_abrev: str) ->
     ws["AL21"] = UNIDAD_SUCAMEC_TEXTO.get(unidad_abrev, unidad_abrev)
 
 
+def _rellenar_resolucion_cabecera(ws, polvorin: PolvorinGuiaSucamec) -> None:
+    """N.° de resolución de gerencia relacionada con la solicitud (celda
+    AE11, sección "I. Sobre autorización relacionada a la guía de
+    tránsito"). Este bloque existe en LOS DOS formatos y encabeza cada
+    guía, así que se rellena tanto en tipo 1 como en tipo 2 — antes solo se
+    escribía el bloque de destino del tipo 2 y la resolución del usuario
+    aparecía en un solo tipo de guía."""
+    numero = polvorin.resolucion_gerencia_numero.strip()
+    if not numero:
+        return
+    if not numero.upper().startswith("N"):
+        numero = f"N° {numero}"
+    ws["AE11"] = numero
+
+
+def _rellenar_origen(ws, polvorin: PolvorinGuiaSucamec) -> None:
+    """Dirección de la planta de origen (celdas E40 y E44/S44/AE44).
+
+    Solo se aplica al TIPO 1, donde el origen es la planta del fabricante
+    (FAMESA por defecto). En tipo 2 esas mismas celdas son el origen del
+    traslado, que ahí es el propio polvorín — otra entidad, así que
+    escribirlas con estos campos la pisaría. Si un campo va vacío se
+    respeta lo que trae la plantilla."""
+    if polvorin.origen_direccion:
+        ws["E40"] = polvorin.origen_direccion
+    if polvorin.origen_distrito:
+        ws["E44"] = polvorin.origen_distrito
+    if polvorin.origen_provincia:
+        ws["S44"] = polvorin.origen_provincia
+    if polvorin.origen_departamento:
+        ws["AE44"] = polvorin.origen_departamento
+
+
 def _rellenar_destino_concesion_tipo2(ws, polvorin: PolvorinGuiaSucamec) -> None:
     if polvorin.concesion_nombre or polvorin.concesion_codigo:
         ws["E51"] = (
@@ -222,6 +255,8 @@ def generar_guia_tipo1(producto: ProductoGuia, guia: GuiaIndividual, firma_bytes
     wb = _cargar_plantilla(plantilla_polvorin, ruta_por_defecto)
     ws = wb.active
     _rellenar_producto(ws, producto.producto_sucamec, guia.cantidad, producto.unidad_abrev)
+    _rellenar_resolucion_cabecera(ws, producto.polvorin)
+    _rellenar_origen(ws, producto.polvorin)
     _insertar_firma(ws, firma_bytes)
     buffer = BytesIO()
     wb.save(buffer)
@@ -234,6 +269,7 @@ def generar_guia_tipo2(producto: ProductoGuia, guia: GuiaIndividual, firma_bytes
     wb = _cargar_plantilla(producto.polvorin.plantilla_tipo2, ruta_por_defecto)
     ws = wb.active
     _rellenar_producto(ws, producto.producto_sucamec, guia.cantidad, producto.unidad_abrev)
+    _rellenar_resolucion_cabecera(ws, producto.polvorin)
     _rellenar_resolucion_origen_tipo2(ws, producto)
     _rellenar_destino_concesion_tipo2(ws, producto.polvorin)
     _rellenar_resolucion_gerencia_tipo2(ws, producto.polvorin)
